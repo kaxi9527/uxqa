@@ -47,6 +47,9 @@ jobs:
         run: node scripts/package/verify-release.mjs '${{ matrix.target }}'
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
+      - name: Install test browser
+        if: runner.os != 'Windows'
+        run: pnpm exec playwright install --with-deps --only-shell chromium
       - name: Unit suite (POSIX permission fixtures)
         if: runner.os != 'Windows'
         run: pnpm test

@@ -40,14 +40,16 @@ node scripts/package/build.mjs --target linux-x64
 node scripts/package/smoke-release.mjs release/uxqa-0.4.0-linux-x64.tar.gz
 ```
 
-Other targets: `win-x64`, `linux-arm64`, `darwin-arm64`, `darwin-x64`. Prefer building
-and testing on the target OS/architecture. Node downloads use official HTTPS URLs
+Other targets: `win-x64`, `linux-arm64`, `darwin-arm64`, `darwin-x64`. Build
+and test on the target OS/architecture: source-analysis binaries must match the host.
+Node downloads use official HTTPS URLs
 and verified SHASUMS256.txt entries. The version-keyed cache defaults to
 `~/.cache/uxqa/node-<version>` and can be overridden by `UXQA_NODE_CACHE`.
 Do not treat different revisions or architectures as interchangeable.
 
 Each archive includes `runtime`, `app`, `model-core`, launchers, local-data guidance,
-licenses and `BUILD-INFO.json`. The browser is an optional separate download; users
+licenses and `BUILD-INFO.json`. jscpd and react-scanner include their own runtime
+dependencies for source analysis. The browser is an optional separate download; users
 see its source and size before agreeing. Linux screenshot capture may additionally
 require distribution libraries. `--node` creates explicitly named local development
 packages; those are not official release assets.
@@ -57,6 +59,8 @@ packages; those are not official release assets.
 `.github/workflows/ci.yml` checks pull requests with read-only permissions. The
 release workflow runs on a `v*` tag, verifies it equals `package.json`'s version,
 and builds on native macOS arm64/x64, Windows x64 and Ubuntu x64/arm64 runners.
+The full JavaScript unit suite runs on POSIX hosts (it includes POSIX mode/symlink
+fixtures); Windows runs typechecking, model-core tests and packaged-runtime smoke.
 Fixture-based runtime smoke tests use temporary account directories and no real
 provider credentials. Browser/model tests do not assert live subscription entitlement.
 

@@ -1,5 +1,18 @@
 # 本地运行、数据与电脑权限 / Local data and permissions
 
+## 中文速读
+
+- **怎么运行**：Mac 打开 `UXQA.app`；Windows 解压后双击 `Open uxqa console.cmd`；Linux 运行 `./open-uxqa-console.sh`。安装包自带 Node 和 UXQA 模型模块。Windows/Linux 使用浏览器显示本机界面，终端要保持打开。
+- **需要什么权限**：读取你选中的项目目录、在自己的用户目录保存配置和报告、访问你填写的预览网址。截图由浏览器完成，无需系统录屏、辅助功能、全盘访问、摄像头、麦克风或管理员权限。保存项目规则、基线或执行组件同步时才会写入对应项目文件。
+- **数据放哪里**：Mac/Linux 默认 `~/.uxqa`，Windows 默认 `%USERPROFILE%\.uxqa`。模型与订阅账号保存在其中的 `model-core`；直接 API 设置在 `ai.json`。命令行报告还可能保存在你指定的 `--out` 目录。凭据是本地文件，不等于经过系统钥匙串加密，不要上传整个数据目录。
+- **什么时候联网**：打开预览页面会访问该页面及其资源；安装截图浏览器会从提示的官方来源下载；登录订阅会访问服务商。只有启用 AI 看图复核时，才会把所选截图及相关复核上下文发给你选择的模型服务。连接测试发送固定测试图。选择“不用”可关闭 AI 复核，源码规则检查仍能工作。
+- **模型登录限制**：ChatGPT/Codex、Copilot 等需要有效的个人账号与套餐；Claude 还需要已安装官方 Claude Code。公开版不内置其他应用的 Google OAuth 客户端信息，Gemini Code Assist/Antigravity 订阅登录需要自行配置获准使用的客户端；Gemini API 协议可以独立使用。
+- **退出和更新**：Mac 按 ⌘Q；Windows/Linux 在启动终端按 Ctrl+C。只关浏览器标签页不会停止服务。更新前退出并备份数据，再替换应用或解压新版；历史版本可在 Releases 中选择。
+- **备份与卸载**：退出后，把自己的数据目录、项目规则和所需报告备份到私密加密位置。删除应用不会自动删除数据；需要时另行删除自己的 UXQA 数据。Playwright 浏览器缓存可能与其他工具共用，不要盲目删除。
+- **首次打开被拦截**：先核对发布来源和 `SHA256SUMS.txt`。本版 Mac 未经 Apple 公证，Windows 没有可信发布者签名；使用系统针对该文件的正常信任入口，不要全局关闭安全保护。受管理电脑不允许未签名软件时，请由管理员处理。
+
+以下英文详细说明列出完整目录、网络去向和权限恢复方式。
+
 UXQA runs its inspection engine and stores its project records on your computer.
 “Local” does not mean every feature is offline: opening a website, downloading a
 browser, signing in to a provider and using an AI model make network requests.

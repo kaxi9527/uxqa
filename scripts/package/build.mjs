@@ -15,7 +15,8 @@ import { buildModelCore } from './model-core.mjs';
 
 const argv = process.argv.slice(2);
 const option = (name) => { const index = argv.indexOf(name); return index >= 0 ? argv[index + 1] : undefined; };
-const ids = pickTargets(argv);
+const ids = pickTargets(argv.includes('--target') ? argv : [...argv, '--target', hostTarget()]);
+if (!argv.includes('--app-only') && ids.some((id) => id !== hostTarget())) throw new Error('Build on each target OS/architecture so the bundled source-analysis binaries match. Use the release workflow for the full matrix.');
 const localNode = option('--node');
 const pkg = JSON.parse(await readFile(join(ROOT, 'package.json'), 'utf8'));
 const VERSION = pkg.version;
@@ -35,6 +36,19 @@ async function resolvePackage(name, from = join(ROOT, 'package.json')) {
     if (manifest?.name === name) return dir;
   }
   throw new Error(`找不到 ${name} 的安装目录`);
+}
+
+// These two tools launch their own CLI files and therefore cannot live only in an
+// esbuild chunk. Copy their exact runtime dependency trees, never the whole install.
+async function copyRuntimePackage(name, destination, from, ancestors = new Map()) {
+  const source = await resolvePackage(name, from);
+  const manifest = JSON.parse(await readFile(join(source, 'package.json'), 'utf8'));
+  if (ancestors.get(name) === manifest.version) return;
+  await cp(source, destination, { recursive: true, dereference: true, filter: (path) => !/(^|[\\/])(node_modules|\.DS_Store)$/.test(path.slice(source.length)) });
+  const chain = new Map(ancestors).set(name, manifest.version);
+  for (const dependency of Object.keys(manifest.dependencies ?? {})) {
+    await copyRuntimePackage(dependency, join(destination, 'node_modules', dependency), join(source, 'package.json'), chain);
+  }
 }
 
 // ---------- 1. app bundle (same for every platform) ----------
@@ -83,6 +97,12 @@ async function buildApp() {
     ['axe-core', await resolvePackage('axe-core', join(axe, 'package.json'))],
   ];
   for (const [name, from] of copies) await cp(from, join(modules, name), { recursive: true, dereference: true, filter: (path) => !/(^|\/)(node_modules|\.DS_Store)$/.test(path.slice(from.length)) });
+  for (const name of ['react-scanner', 'jscpd']) await copyRuntimePackage(name, join(modules, name), join(ROOT, 'package.json'));
+  const jscpd = await resolvePackage('jscpd');
+  const platformMap = createRequire(join(jscpd, 'package.json'))('./platform-map.js');
+  const platformPackage = platformMap.PLATFORM_MAP[platformMap.getPlatformKey()]?.packageName;
+  if (!platformPackage) throw new Error('No jscpd runtime for this build host');
+  await copyRuntimePackage(platformPackage, join(modules, platformPackage), join(jscpd, 'package.json'));
   // TypeScript: only the compiler API file and its licence (the rest is the tsc/tsserver tooling, about 10 MiB).
   const ts = await resolvePackage('typescript');
   await mkdir(join(modules, 'typescript/lib'), { recursive: true });
@@ -90,6 +110,7 @@ async function buildApp() {
   await writeFile(join(app, 'package.json'), `${JSON.stringify({ name: pkg.name, version: VERSION, private: true, type: 'module' }, null, 2)}\n`);
   const versions = Object.fromEntries(await Promise.all(copies.map(async ([name]) => [name, JSON.parse(await readFile(join(modules, name, 'package.json'), 'utf8')).version])));
   versions.typescript = JSON.parse(await readFile(join(ts, 'package.json'), 'utf8')).version;
+  for (const name of ['jscpd', 'react-scanner']) versions[name] = JSON.parse(await readFile(join(modules, name, 'package.json'), 'utf8')).version;
   console.log(`  ${outputs} 个文件；随包依赖 ${Object.entries(versions).map(([name, version]) => `${name}@${version}`).join('、')}`);
   return { app, versions };
 }

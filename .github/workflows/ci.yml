@@ -22,6 +22,8 @@ jobs:
           cache-dependency-path: native/model-core/go.sum
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
+      - name: Install test browser
+        run: pnpm exec playwright install --with-deps --only-shell chromium
       - run: pnpm test
       - run: pnpm build
       - name: Model core tests

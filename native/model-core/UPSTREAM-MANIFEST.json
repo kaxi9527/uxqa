@@ -1148,6 +1148,7 @@
     "internal/usage/zone.go": "cb80450d411f053b8f34355fdd4e3f4d28988d5b552d9e16bf91b93966e2cbcd",
     "internal/usage/zone_test.go": "877c34f39a47823a423042d901894a2e2231c4c3e4b9e1f70c568cc4820c93eb",
     "internal/usageapi/usageapi.go": "d1460a87f1e18b32963d9535df4824d1e275dd234a2abd09f03432dd0eb8ece9",
-    "internal/wslrun/wslrun.go": "7fadd1e6ddd6bcad3de571ddc90545f6570b3fc258916aebe58d610a9f11e0d1"
+    "internal/wslrun/wslrun.go": "7fadd1e6ddd6bcad3de571ddc90545f6570b3fc258916aebe58d610a9f11e0d1",
+    "internal/pii/guard/kernel_amd64.s": "bda3c96e063b1b2f71259a028b18dc2a3086b94f758c2f5691d6c90b14cd0560"
   }
 }

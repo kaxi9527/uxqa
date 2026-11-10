@@ -37,6 +37,10 @@ try {
   const help = spawnSync(node, [join(root, 'app/uxqa.mjs'), '--help'], { env, encoding: 'utf8' });
   assert.equal(help.status, 0, `Bundled CLI failed: ${help.stderr}`);
   assert.match(help.stdout, /uxqa/);
+  for (const [tool, argument] of [['jscpd/run-jscpd.js', '--version'], ['react-scanner/bin/react-scanner', '--help']]) {
+    const checked = spawnSync(node, [join(root, 'app/node_modules', tool), argument], { env, encoding: 'utf8' });
+    assert.equal(checked.status, 0, `Source tool ${tool} failed: ${checked.stderr}`);
+  }
   child = spawn(node, [join(root, 'app/desktop.mjs')], { env, stdio: ['pipe', 'pipe', 'pipe'] });
   const url = await new Promise((done, fail) => {
     let text = '';
@@ -69,6 +73,12 @@ try {
   const state = await api('/ai/native/state');
   assert.deepEqual(state.accounts, [], 'Fresh package never imports accounts');
   assert.deepEqual(state.providers, [], 'Fresh package has no private providers');
+  if (!env.UXQA_GEMINI_OAUTH_CLIENT_ID || !env.UXQA_GEMINI_OAUTH_CLIENT_SECRET) {
+    assert.equal(state.capabilities.find((item) => item.id === 'gemini').available, false);
+    const login = await fetch(`${origin}/api/ai/native/login`, { method: 'POST', headers: { 'x-uxqa-token': token, 'content-type': 'application/json' }, body: JSON.stringify({ agent: 'gemini' }) });
+    assert.equal(login.status, 400, 'Missing Google OAuth configuration is rejected before login');
+    assert.match((await login.json()).error, /OAuth/);
+  }
   fixture.listen(0, '127.0.0.1');
   await once(fixture, 'listening');
   const saved = await api('/ai/native/providers', { name: 'Release fixture', protocol: 'openai', baseUrl: `http://127.0.0.1:${fixture.address().port}/v1`, apiKey: 'fixture-not-a-secret' });

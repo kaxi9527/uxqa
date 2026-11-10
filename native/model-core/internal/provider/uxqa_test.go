@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -125,7 +126,7 @@ func TestUXQAAccountIsolationAndAuthorization(t *testing.T) {
 	if state.State != "canceled" {
 		t.Fatal("cancel did not finish")
 	}
-	if info, err := os.Stat(loginsPath()); err != nil || info.Mode().Perm()&0077 != 0 {
+	if info, err := os.Stat(loginsPath()); err != nil || (runtime.GOOS != "windows" && info.Mode().Perm()&0077 != 0) {
 		t.Fatal("credentials are not private")
 	}
 }
