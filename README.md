@@ -32,13 +32,15 @@ developer instructions.
 | --- | --- | --- |
 | macOS 14+, Apple Silicon | [macOS arm64](https://github.com/kaxi9527/uxqa/releases/download/v0.4.0/UXQA-0.4.0-macOS-arm64.zip) | Open `UXQA.app` |
 | macOS 14+, Intel | [macOS x64](https://github.com/kaxi9527/uxqa/releases/download/v0.4.0/UXQA-0.4.0-macOS-x64.zip) | Open `UXQA.app` |
-| Windows 10/11, x64 | [Windows x64](https://github.com/kaxi9527/uxqa/releases/download/v0.4.0/uxqa-0.4.0-win-x64.zip) | `Open uxqa console.cmd` |
+| Windows 11+, x64 | [Windows x64](https://github.com/kaxi9527/uxqa/releases/download/v0.4.0/uxqa-0.4.0-win-x64.zip) | `Open uxqa console.cmd` |
 | Linux x64, glibc (Ubuntu 22.04/24.04 recommended) | [Linux x64](https://github.com/kaxi9527/uxqa/releases/download/v0.4.0/uxqa-0.4.0-linux-x64.tar.gz) | `./open-uxqa-console.sh` |
 | Linux ARM64, glibc | [Linux arm64](https://github.com/kaxi9527/uxqa/releases/download/v0.4.0/uxqa-0.4.0-linux-arm64.tar.gz) | `./open-uxqa-console.sh` |
 
 macOS opens a native window. Windows/Linux open the same local UXQA console in your
 browser; keep the launcher terminal open and press Ctrl+C to quit. Windows ARM64
 has no native package in this release. Linux musl/Alpine is not a supported binary target.
+Screenshot capture follows [Playwright's supported operating systems](https://playwright.dev/docs/intro#system-requirements);
+Windows 10 is not an officially supported screenshot target.
 See release notes for actual CI and manual validation; a build is not proof of every
 OS version or subscription login working.
 
