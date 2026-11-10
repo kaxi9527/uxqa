@@ -29,3 +29,5 @@ sends selected screenshots/context to the selected provider.
 
 See README for downloads and docs/local-data-and-permissions.md for local storage,
 computer permissions, network requests, backup and uninstall instructions.
+
+中文 [安装与使用说明](https://github.com/kaxi9527/uxqa/blob/main/docs/install-and-use.md)：下载包选择、各系统解压启动、首次打开提示、第一次检测、更新与常见问题。无需应用商店，直接下载使用。

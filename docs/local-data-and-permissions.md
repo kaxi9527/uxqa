@@ -1,5 +1,7 @@
 # 本地运行、数据与电脑权限 / Local data and permissions
 
+首次下载请先看 [安装与使用说明](install-and-use.md)，按你的系统完成解压、首次启动和第一次检测。
+
 ## 中文速读
 
 - **怎么运行**：Mac 打开 `UXQA.app`；Windows 解压后双击 `Open uxqa console.cmd`；Linux 运行 `./open-uxqa-console.sh`。安装包自带 Node 和 UXQA 模型模块。Windows/Linux 使用浏览器显示本机界面，终端要保持打开。

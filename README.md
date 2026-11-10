@@ -4,7 +4,7 @@
 
 **Check the UI your AI built. Keep the evidence on your computer.**
 
-[Download / 下载](https://github.com/kaxi9527/uxqa/releases/latest) · [中文使用与权限说明](docs/local-data-and-permissions.md) · [Contribute](CONTRIBUTING.md) · [Report an issue](https://github.com/kaxi9527/uxqa/issues)
+[Download / 下载](https://github.com/kaxi9527/uxqa/releases/latest) · [安装与使用](docs/install-and-use.md) · [数据与权限说明](docs/local-data-and-permissions.md) · [Contribute](CONTRIBUTING.md) · [Report an issue](https://github.com/kaxi9527/uxqa/issues)
 
 UXQA 是一个本地运行的界面检查工具：检查组件复用、页面溢出与可访问性，保存截图和复现证据，并可选择连接模型做看图复核。模型接入中心把协议配置、订阅登录和账号管理放在同一个产品里。
 
@@ -22,6 +22,8 @@ Standalone UX and frontend QA for arbitrary web products. Point it at a URL, opt
 It runs Chromium through Playwright, checks page health and failed requests, evaluates accessibility with axe-core, exercises configured user flows, and captures screenshots plus Playwright traces. Product-specific behavior stays in the scenario file.
 
 ## 下载安装 / Downloads
+
+**首次使用请看 [安装与使用说明](docs/install-and-use.md)**：选哪个包、Mac / Windows / Linux 解压启动、首次打开提示、第一次检测、更新卸载和常见故障。直接通过 GitHub 下载即可，无需应用商店。
 
 Download a versioned archive from [Releases](https://github.com/kaxi9527/uxqa/releases).
 Node and the UXQA model module are included. You do not need Magpie or a separate
