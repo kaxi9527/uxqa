@@ -1,0 +1,16 @@
+{
+  "name": "Component reuse example",
+  "baseUrl": "http://127.0.0.1:9123",
+  "routes": ["/projects", "/events"],
+  "viewports": [
+    {"name":"desktop","width":1440,"height":900},
+    {"name":"mobile","width":390,"height":844}
+  ],
+  "flows": [{
+    "name":"open details",
+    "steps":[
+      {"action":"click","target":{"role":"button","name":"Details","exact":true}},
+      {"action":"expectVisible","target":{"role":"dialog"}}
+    ]
+  }]
+}

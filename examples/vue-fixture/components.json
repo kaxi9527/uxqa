@@ -1,0 +1,6 @@
+{
+  "$schema": "https://shadcn-vue.com/schema.json",
+  "typescript": true,
+  "tailwind": { "css": "src/assets/main.css", "cssVariables": true },
+  "aliases": { "components": "@/components", "ui": "@/components/ui" }
+}

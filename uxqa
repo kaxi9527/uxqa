@@ -1,0 +1,11 @@
+#!/bin/sh
+set -eu
+uxqa_script=$(node -p 'require("node:fs").realpathSync(process.argv[1])' "$0")
+uxqa_root=$(CDPATH= cd -- "$(dirname -- "$uxqa_script")" && pwd)
+UXQA_OUTPUT_ROOT=${UXQA_OUTPUT_ROOT:-"$uxqa_root/artifacts"}
+export UXQA_OUTPUT_ROOT
+if [ ! -f "$uxqa_root/dist/src/cli.js" ]; then
+  printf '%s\n' 'UXQA is not built. Run pnpm run build in the project directory.' >&2
+  exit 2
+fi
+exec node "$uxqa_root/dist/src/cli.js" "$@"

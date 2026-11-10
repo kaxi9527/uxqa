@@ -1,0 +1,4 @@
+{
+  // shadcn-style alias
+  "compilerOptions": { "baseUrl": ".", "paths": { "@/*": ["./src/*"] }, },
+}

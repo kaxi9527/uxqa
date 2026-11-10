@@ -1,0 +1,18 @@
+{
+  "productId": "example-product",
+  "id": "record-card",
+  "name": "RecordCard",
+  "description": "Display one project or event record through the shared product library.",
+  "level": "atom-group",
+  "implementation": ["src/component-library/RecordCard.tsx"],
+  "consumers": ["src/RecordPage.tsx"],
+  "props": [{"name":"title","type":"string","required":true,"description":"Record title"}],
+  "variants": ["default", "compact"],
+  "states": ["default", "focus-visible", "disabled"],
+  "anatomy": ["Heading", "Description", "Action"],
+  "behavior": ["Action exposes the record details.", "Wrap content on narrow viewports."],
+  "accessibility": ["Use a heading for the title and a native button for the action.", "Preserve keyboard focus visibility."],
+  "usage": ["Project and event record lists."],
+  "antiUsage": ["Use a dedicated dialog for editing."],
+  "verification": {"testScript":"test","typecheckScript":"typecheck","qaConfig":"qa/component.json"}
+}

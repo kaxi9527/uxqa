@@ -1,0 +1,22 @@
+node_modules/
+dist/
+artifacts/
+.DS_Store
+auth/
+*.storage-state.json
+# local backups and tool state
+.ai-output/*.tgz
+.claude/.cc-writes/
+*.tmp
+
+# download packages (scripts/package/build.mjs)
+release/
+.ai-output/
+.workshelf-origin.jsonl
+**/.workshelf-origin.jsonl
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.uxqa/

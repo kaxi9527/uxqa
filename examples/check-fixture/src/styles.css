@@ -1,0 +1,10 @@
+:root {
+  --primary: #1a73e8;
+  --muted-foreground: #6b7280;
+  --radius: 8px;
+}
+@theme inline {
+  --color-primary: var(--primary);
+  --color-muted-foreground: var(--muted-foreground);
+}
+.legacy-banner { color: #ff0000; }

@@ -1,0 +1,25 @@
+{
+  "name": "todomvc",
+  "baseUrl": "https://demo.playwright.dev/todomvc/",
+  "routes": ["/todomvc/"],
+  "viewports": [
+    { "name": "desktop", "width": 1440, "height": 900 },
+    { "name": "mobile", "width": 390, "height": 844 }
+  ],
+  "options": {
+    "axe": true,
+    "screenshots": true,
+    "trace": "on-failure"
+  },
+  "flows": [
+    {
+      "name": "add and complete a todo",
+      "route": "/todomvc/",
+      "steps": [
+        { "action": "fill", "target": { "css": ".new-todo" }, "value": "Run UXQA" },
+        { "action": "press", "target": { "css": ".new-todo" }, "key": "Enter" },
+        { "action": "expectVisible", "target": { "text": "Run UXQA" } }
+      ]
+    }
+  ]
+}

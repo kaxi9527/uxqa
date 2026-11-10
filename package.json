@@ -1,0 +1,50 @@
+{
+  "name": "uxqa-harness",
+  "version": "0.4.0",
+  "license": "MIT",
+  "repository": { "type": "git", "url": "https://github.com/kaxi9527/uxqa.git" },
+  "homepage": "https://github.com/kaxi9527/uxqa#readme",
+  "bugs": { "url": "https://github.com/kaxi9527/uxqa/issues" },
+  "private": true,
+  "packageManager": "pnpm@11.25.0",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "type": "module",
+  "description": "Standalone UX and frontend QA harness for web products.",
+  "bin": {
+    "uxqa": "dist/src/cli.js"
+  },
+  "scripts": {
+    "test": "vitest run --maxWorkers=1 --no-file-parallelism",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc",
+    "components": "tsx src/cli.ts components",
+    "smoke:components": "pnpm run build && node scripts/component-smoke.mjs",
+    "demo:components": "node examples/component-site.mjs",
+    "smoke:library": "pnpm run build && node scripts/library-smoke.mjs",
+    "setup:browser": "playwright install chromium",
+    "smoke": "tsx src/cli.ts run --config examples/todomvc.json",
+    "package:fetch-node": "node scripts/package/fetch-node.mjs",
+    "package": "node scripts/package/build.mjs",
+    "package:smoke": "node scripts/package/smoke.mjs",
+    "package:desktop": "node scripts/desktop/build.mjs",
+    "smoke:desktop": "node scripts/desktop/smoke.mjs"
+  },
+  "dependencies": {
+    "@axe-core/playwright": "^4.11.0",
+    "@projectwallace/css-analyzer": "9.9.3",
+    "@projectwallace/css-parser": "0.18.8",
+    "dembrandt": "0.38.0",
+    "jscpd": "5.4.1",
+    "playwright": "^1.61.1",
+    "react-scanner": "1.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.7"
+  }
+}

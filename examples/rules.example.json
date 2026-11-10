@@ -1,0 +1,14 @@
+{
+  "extends": "uxqa:basic",
+  "library": { "root": "src/components/ui" },
+  "rules": [
+    { "id": "basic/no-arbitrary-size", "level": "off", "scope": ["src/pages/admin/**"], "reason": "管理后台表格列宽逐列确定，见设计决策 D-07" },
+    { "id": "spacing-scale", "type": "value-scale", "property": "spacing", "allowed": "multiple-of-4", "level": "must" },
+    { "id": "font-scale", "type": "value-scale", "property": "font-size", "allowed": [12, 14, 16, 20, 24], "level": "default" },
+    { "id": "short-buttons", "type": "text-length", "max": 8, "level": "default", "fix": "按钮文字控制在 8 个字以内，补充说明放到旁边" },
+    { "id": "no-second-library", "type": "forbid-import", "module": "antd", "level": "must", "fix": "改用 @/components/ui 里的组件" },
+    { "id": "image-alt", "type": "require-prop", "component": "Avatar", "prop": "alt", "level": "default" },
+    { "id": "native-link-button", "type": "require-library-component", "element": "a", "role": "button", "component": "Button", "level": "must" },
+    { "id": "tone", "text": "整体要简洁，一屏不超过一个主按钮" }
+  ]
+}
