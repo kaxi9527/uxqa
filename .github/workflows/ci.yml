@@ -31,3 +31,4 @@ jobs:
         run: go test -p 2 ./cmd/uxqa-core ./internal/appdir ./internal/provider
         env:
           GOMAXPROCS: '2'
+          CGO_ENABLED: '0'

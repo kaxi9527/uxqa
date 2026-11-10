@@ -40,14 +40,21 @@ async function resolvePackage(name, from = join(ROOT, 'package.json')) {
 
 // These two tools launch their own CLI files and therefore cannot live only in an
 // esbuild chunk. Copy their exact runtime dependency trees, never the whole install.
-async function copyRuntimePackage(name, destination, from, ancestors = new Map()) {
+async function copyRuntimePackage(name, destination, from, ancestors = new Map(), flatRoot = join(destination, 'node_modules')) {
   const source = await resolvePackage(name, from);
   const manifest = JSON.parse(await readFile(join(source, 'package.json'), 'utf8'));
   if (ancestors.get(name) === manifest.version) return;
+  const existing = await readFile(join(destination, 'package.json'), 'utf8').then(JSON.parse, () => null);
+  if (existing) {
+    if (existing.name !== name || existing.version !== manifest.version) throw new Error(`Runtime dependency version conflict for ${name}`);
+    return;
+  }
   await cp(source, destination, { recursive: true, dereference: true, filter: (path) => !/(^|[\\/])(node_modules|\.DS_Store)$/.test(path.slice(source.length)) });
   const chain = new Map(ancestors).set(name, manifest.version);
   for (const dependency of Object.keys(manifest.dependencies ?? {})) {
-    await copyRuntimePackage(dependency, join(destination, 'node_modules', dependency), join(source, 'package.json'), chain);
+    // This locked tool closure has one version per name. Keep it shallow for
+    // Windows Explorer instead of nesting a node_modules directory at every edge.
+    await copyRuntimePackage(dependency, join(flatRoot, dependency), join(source, 'package.json'), chain, flatRoot);
   }
 }
 

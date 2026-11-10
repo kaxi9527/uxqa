@@ -13,11 +13,12 @@ pnpm test
 pnpm build
 cd native/model-core
 go mod download
-go test -p 2 ./cmd/uxqa-core ./internal/appdir ./internal/provider
+CGO_ENABLED=0 go test -p 2 ./cmd/uxqa-core ./internal/appdir ./internal/provider
 ```
 
 Build commands below run from the repository root. Model-core builds use cached
 modules with `GOPROXY=off`, bounded Go parallelism and the private UXQA entry point.
+Tests and releases use `CGO_ENABLED=0` to match the shipped standalone model core.
 No account state is copied. Do not package your data directory.
 
 ## Native macOS
@@ -59,6 +60,9 @@ packages; those are not official release assets.
 `.github/workflows/ci.yml` checks pull requests with read-only permissions. The
 release workflow runs on a `v*` tag, verifies it equals `package.json`'s version,
 and builds on native macOS arm64/x64, Windows x64 and Ubuntu x64/arm64 runners.
+Alternatively, dispatch Release on `main` with `create_release=true`; after the
+same verification gates it creates the version tag and draft at that exact commit.
+The workflow token does not recursively trigger another workflow run.
 The full JavaScript unit suite runs on POSIX hosts (it includes POSIX mode/symlink
 fixtures); Windows runs typechecking, model-core tests and packaged-runtime smoke.
 Fixture-based runtime smoke tests use temporary account directories and no real
