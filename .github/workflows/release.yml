@@ -11,7 +11,31 @@ on:
 permissions:
   contents: read
 jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    outputs:
+      build: ${{ steps.release.outputs.build }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - id: release
+        name: Preserve an already published version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CHECK_RELEASE: ${{ startsWith(github.ref, 'refs/tags/v') || inputs.create_release }}
+        run: |
+          tag="v$(node -p 'require("./package.json").version')"
+          if [[ "$GITHUB_REF_TYPE" == tag && "$GITHUB_REF_NAME" != "$tag" ]]; then
+            echo 'Tag must equal package.json version'; exit 1
+          fi
+          if [[ "$CHECK_RELEASE" == true && "$(gh release view "$tag" --json isDraft --jq .isDraft 2>/dev/null)" == false ]]; then
+            echo 'Version already published; preserving its verified assets.'
+            echo 'build=false' >> "$GITHUB_OUTPUT"
+          else
+            echo 'build=true' >> "$GITHUB_OUTPUT"
+          fi
   build:
+    needs: preflight
+    if: needs.preflight.outputs.build == 'true'
     timeout-minutes: 35
     strategy:
       fail-fast: false

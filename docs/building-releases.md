@@ -62,7 +62,9 @@ release workflow runs on a `v*` tag, verifies it equals `package.json`'s version
 and builds on native macOS arm64/x64, Windows x64 and Ubuntu x64/arm64 runners.
 Alternatively, dispatch Release on `main` with `create_release=true`; after the
 same verification gates it creates the version tag and draft at that exact commit.
-The workflow token does not recursively trigger another workflow run.
+Publishing a new draft tag can trigger the tag workflow once more. Its preflight
+recognizes an already published version and skips duplicate builds/uploads, keeping
+the verified public assets immutable. A build-only manual dispatch still runs checks.
 The full JavaScript unit suite runs on POSIX hosts (it includes POSIX mode/symlink
 fixtures); Windows runs typechecking, model-core tests and packaged-runtime smoke.
 Fixture-based runtime smoke tests use temporary account directories and no real
