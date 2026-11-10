@@ -26,7 +26,7 @@ const STRETCHED = "data:image/svg+xml," + encodeURIComponent("<svg xmlns='http:/
 const MORE = `<!doctype html><html lang="zh"><head><meta charset="utf-8"><title>more</title>
 <style>body{margin:0;font:14px/1.5 sans-serif} .stack > div{margin:6px 0}</style></head><body><main>
   <p class="faint-note" style="color:#bbb">浅灰色的说明文字</p>
-  <button disabled style="color:#ccc">禁用的按钮</button>
+  <button disabled style="color:#ccc;height:20px;box-sizing:border-box;padding:0;border-radius:0">禁用的按钮</button>
   <div class="tag-box" style="width:60px;white-space:nowrap">这是一段很长不会换行的文字</div>
   <div style="width:120px;overflow-x:auto"><pre style="margin:0">code line that is very long and scrolls sideways</pre></div>
   <img alt="横幅" src="${STRETCHED}" style="width:100px;height:100px">
@@ -199,7 +199,7 @@ describe('newer page checks', () => {
 
   it('flags a page that mixes too many font sizes, button heights and corner radii', () => {
     expect(names('visual/few-font-sizes')[0]).toMatch(/^这一页用了 1\d 种字号$/);
-    expect(names('visual/consistent-button-height')).toEqual(['这一页的按钮有 6 种高度']); // five styled buttons plus the browser-default disabled one
+    expect(names('visual/consistent-button-height')).toEqual(['这一页的按钮有 6 种高度']); // five styled buttons plus the explicit 20px disabled one; no OS-default geometry
     expect(names('visual/consistent-radius')).toEqual(['这一页的按钮有 4 种圆角']);
   });
 });
