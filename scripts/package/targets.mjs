@@ -5,6 +5,9 @@ import { homedir } from 'node:os';
 
 export const ROOT = join(dirname(fileURLToPath(import.meta.url)), '../..');
 export const RELEASE = join(ROOT, 'release');
+// Git Bash's GNU tar interprets Windows drive letters as remote hosts and cannot
+// extract zip archives. Use the Windows-provided bsdtar on that platform.
+export const TAR = process.platform === 'win32' ? join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'tar.exe') : 'tar';
 
 /** Official Node 22 LTS shipped inside every package. Change here only; fetch-node.mjs verifies against nodejs.org SHASUMS256.txt. */
 export const NODE_VERSION = 'v22.23.4';

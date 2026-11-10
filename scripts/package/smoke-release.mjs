@@ -6,6 +6,7 @@ import { mkdtemp, mkdir, readdir, readFile, rm } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { TAR } from './targets.mjs';
 
 const archive = resolve(process.argv[2]);
 const work = await mkdtemp(join(tmpdir(), 'uxqa-release-smoke-'));
@@ -18,7 +19,7 @@ const fixture = createServer((req, res) => {
   else { res.statusCode = 404; res.end('{}'); }
 });
 try {
-  const extract = spawnSync('tar', ['-xf', archive, '-C', work], { encoding: 'utf8' });
+  const extract = spawnSync(TAR, ['-xf', archive, '-C', work], { encoding: 'utf8' });
   assert.equal(extract.status, 0, `Extract failed: ${extract.stderr}`);
   const top = (await readdir(work)).find((name) => name === 'UXQA.app' || name.startsWith('uxqa-'));
   assert.ok(top, 'Archive has an application folder');

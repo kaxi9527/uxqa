@@ -8,6 +8,10 @@ interface Engine { child: ChildProcess; baseUrl: string; token: string }
 let running: Engine | undefined;
 let starting: Promise<Engine> | undefined;
 
+export class EngineRequestError extends Error {
+  constructor(public readonly status: number, message: string) { super(message); }
+}
+
 export async function engineStatus() {
   const binary = process.env.UXQA_MODEL_CORE;
   const available = !!binary && await access(binary).then(() => true, () => false);
@@ -92,7 +96,7 @@ export async function engineRequest(path: string, input?: unknown): Promise<unkn
     ...(input === undefined ? {} : { body: JSON.stringify(input) }), signal: AbortSignal.timeout(60000), redirect: 'error',
   });
   const result = await response.json() as { error?: string };
-  if (!response.ok) throw new Error(result.error ?? `模型操作失败（${response.status}）`);
+  if (!response.ok) throw new EngineRequestError(response.status, result.error ?? `模型操作失败（${response.status}）`);
   return result;
 }
 

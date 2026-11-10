@@ -11,6 +11,10 @@ UXQA 是一个本地运行的界面检查工具：检查组件复用、页面溢
 If UXQA helps you ship a better interface, a ⭐ helps others find it. Bug reports,
 docs and small, well-tested PRs are equally welcome.
 
+<img src="assets/model-center.png" width="960" alt="UXQA model access center with a synthetic local provider and subscription sign-in controls">
+
+*模型接入中心预览，使用合成测试数据。 / Model access center with synthetic fixture data.*
+
 A component gatekeeper for AI-written web frontends. It checks whether the AI used your own component library or rebuilt something the library already has, points to the file and line, and marks it on a screenshot. It also flags visual breakage such as overflowing or clipped text, overlapping elements and button labels that break as the page narrows. Results come from fixed rules, not a model, so any coding agent can run it and get the same answer. Product scope and limits live in [the product guide](docs/product-guide.md).
 
 Standalone UX and frontend QA for arbitrary web products. Point it at a URL, optionally provide a JSON scenario, and get reproducible browser evidence without changing the product under test.

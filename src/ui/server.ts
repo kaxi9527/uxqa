@@ -18,7 +18,7 @@ import { defaultScanRoot, discoverProjects } from './discover.js';
 import { homedir } from 'node:os';
 import { chromium, type Browser, type BrowserContext } from 'playwright';
 import { AI_PRESETS, AiError, askVision, listModels, modelBase, publicAi, readAiSettings, writeAiSettings, type AiSettings, type AiProtocol } from '../ai/model.js';
-import { engineStatus, engineRequest, stopEngine } from '../ai/engine.js';
+import { engineStatus, engineRequest, stopEngine, EngineRequestError } from '../ai/engine.js';
 import { reviewContext, reviewRound, runRound } from './round-runner.js';
 import { reviewTasks } from '../ai/review.js';
 import { browserInfo, browserReady, installBrowser, installState, type BrowserKind } from '../browser/install.js';
@@ -530,7 +530,7 @@ export async function startConsole(options: { port?: number; host?: string } = {
       });
       response.end(asset.encoding === 'base64' ? Buffer.from(asset.body, 'base64') : asset.body);
     } catch (error) {
-      const status = error instanceof HttpError ? error.status : 500;
+      const status = error instanceof HttpError || error instanceof EngineRequestError ? error.status : 500;
       send(response, status, { error: error instanceof Error ? error.message : String(error) });
     }
   });

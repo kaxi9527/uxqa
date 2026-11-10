@@ -10,7 +10,7 @@ import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { readSums, sha256, verified } from './fetch-node.mjs';
-import { hostTarget, mib, NODE_CACHE, NODE_DIST, NODE_VERSION, pickTargets, RELEASE, ROOT, TARGETS } from './targets.mjs';
+import { hostTarget, mib, NODE_CACHE, NODE_DIST, NODE_VERSION, pickTargets, RELEASE, ROOT, TARGETS, TAR } from './targets.mjs';
 import { buildModelCore } from './model-core.mjs';
 
 const argv = process.argv.slice(2);
@@ -148,8 +148,7 @@ async function nodeRuntime(target, into) {
   const top = spec.archive.replace(/\.(tar\.gz|tar\.xz|zip)$/, '');
   const temp = await mkdtemp(join(tmpdir(), 'uxqa-node-'));
   try {
-    if (spec.archive.endsWith('.zip')) run('tar', ['-xf', archive, '-C', temp, `${top}/${spec.node}`, `${top}/LICENSE`]);
-    else run('tar', ['-xf', archive, '-C', temp, `${top}/${spec.node}`, `${top}/LICENSE`]);
+    run(TAR, ['-xf', archive, '-C', temp, `${top}/${spec.node}`, `${top}/LICENSE`]);
     await copyFile(join(temp, top, spec.node), binary);
     await copyFile(join(temp, top, 'LICENSE'), join(into, 'LICENSE'));
     if (spec.os !== 'win32') await chmod(binary, 0o755);
