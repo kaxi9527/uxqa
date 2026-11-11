@@ -4,7 +4,7 @@
 
 **Check the UI your AI built. Keep the evidence on your computer.**
 
-[Download / 下载](https://github.com/kaxi9527/uxqa/releases/latest) · [安装与使用](docs/install-and-use.md) · [数据与权限说明](docs/local-data-and-permissions.md) · [Contribute](CONTRIBUTING.md) · [Report an issue](https://github.com/kaxi9527/uxqa/issues)
+[Download / 下载](https://github.com/kaxi9527/uxqa/releases) · [安装与使用](docs/install-and-use.md) · [数据与权限说明](docs/local-data-and-permissions.md) · [Contribute](CONTRIBUTING.md) · [Report an issue](https://github.com/kaxi9527/uxqa/issues)
 
 [English installation and update guide](docs/install-and-use.en.md)
  · [中文使用说明](docs/product-guide.zh-CN.md) · [English user guide](docs/product-guide.en.md) · [更新说明 / Release notes](docs/release-notes.zh-CN.md)
