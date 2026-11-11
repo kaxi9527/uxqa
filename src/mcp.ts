@@ -10,8 +10,23 @@ import { runCheck } from './check/run.js';
 import { findComponents } from './inventory/find.js';
 import { findProductRoot, libraryLabel, readInventory } from './inventory/read.js';
 import { buildRuleSet, readRuleFile } from './rules/load.js';
+import { DIAGNOSIS_FOCUSES } from './guidance/diagnostics.js';
+import { createDiagnosis, listDiagnoses } from './ui/diagnosis.js';
+import { getDiagnosisVerification, recordDiagnosisVerification, VERIFICATION_STATES } from './ui/diagnosis-verification.js';
+import { readIssueWorkflow } from './ui/issue-workflow.js';
+import { availableRoundScreenshots } from './ui/screenshot-retention.js';
 
 const TOOLS = [
+  {
+    name: 'diagnose_quality',
+    description: '根据已有检测证据、项目约束和 UXQA 内置知识，生成并保存专项诊断与修复方案，包含待验证项和复检方法。不修改项目源码，不把生成方案当作检查通过。',
+    inputSchema: { type: 'object', properties: { focus: { type: 'string', enum: DIAGNOSIS_FOCUSES.map((item) => item.id), description: '诊断重点，默认 overall' }, objective: { type: 'string', description: '可选：目标、保留条件或需要解决的问题' }, round: { type: 'string', description: '可选：检测轮次，默认最近一次' } } },
+  },
+  {
+    name: 'quality_verification',
+    description: '读取或记录专项方案的逐项验证结果。省略 plan 时列出方案；提供 plan 时读取任务与历史；提供 task 时须填写 status 与实际证据 note。记录不会执行检测、不代表自动通过，也不修改项目源码。',
+    inputSchema: { type: 'object', properties: { plan: { type: 'string', description: '已保存的方案 ID' }, task: { type: 'string', description: '待记录的任务 ID；省略时只读' }, status: { type: 'string', enum: Object.keys(VERIFICATION_STATES) }, note: { type: 'string', description: '实际操作、观察证据或适用性理由，必须如实填写' } } },
+  },
   {
     name: 'find_component',
     description: '写任何界面元素（按钮、标签页、弹窗、输入框、卡片等）之前先调用：在项目自己的组件库里找现成组件，返回引入方式和可选样式。找不到时如实说明，此时应在组件库里新建，而不是写在页面里。',
@@ -50,7 +65,7 @@ const TOOLS = [
       properties: {
         round: { type: 'string', description: 'review_screenshots 返回的轮次编号' },
         verdicts: { type: 'array', items: { type: 'object', properties: { id: { type: 'string' }, verdict: { type: 'string', enum: ['real', 'not-real', 'unsure'] }, reason: { type: 'string' } }, required: ['id', 'verdict', 'reason'] } },
-        findings: { type: 'array', items: { type: 'object', properties: { view: { type: 'string' }, title: { type: 'string' }, detail: { type: 'string' }, fix: { type: 'string' }, rule: { type: 'string' }, box: { type: 'array', items: { type: 'number' }, description: '[x, y, 宽, 高]，截图像素坐标' } }, required: ['view', 'title', 'detail'] } },
+        findings: { type: 'array', items: { type: 'object', properties: { view: { type: 'string' }, title: { type: 'string' }, domain: { type: 'string', enum: ['ui', 'ux', 'experience'] }, detail: { type: 'string' }, fix: { type: 'string' }, rule: { type: 'string' }, box: { type: 'array', items: { type: 'number' }, description: '[x, y, 宽, 高]，截图像素坐标' } }, required: ['view', 'title', 'detail'] } },
         reviewed_views: { type: 'array', items: { type: 'string' } },
       },
       required: ['round'],
@@ -74,6 +89,27 @@ async function latestRound(entry: ProjectEntry): Promise<Round | undefined> {
 }
 
 async function agentTool(source: string, name: string, args: Record<string, unknown>): Promise<Content | undefined> {
+  if (name === 'diagnose_quality') {
+    const focus = DIAGNOSIS_FOCUSES.find((item) => item.id === (args.focus ?? 'overall'));
+    if (!focus) throw new Error('请选择有效的专项诊断目标');
+    const entry = await consoleProject(source);
+    const round = typeof args.round === 'string' ? await getRound(entry.id, args.round) : await latestRound(entry);
+    if (!round) return [{ type: 'text', text: '还没有可用的检测证据。请先完成一轮检查，再生成诊断与修复方案。' }];
+    const plan = await createDiagnosis(entry, round, await readIssueWorkflow(entry.id), focus, typeof args.objective === 'string' ? args.objective.trim().slice(0, 500) : '');
+    return [{ type: 'text', text: `方案 ID：${plan.id}\n\n${plan.markdown}` }];
+  }
+  if (name === 'quality_verification') {
+    const entry = await consoleProject(source);
+    if (args.plan === undefined) {
+      if (args.task !== undefined || args.status !== undefined || args.note !== undefined) throw new Error('记录验证结果时必须提供方案 ID');
+      return [{ type: 'text', text: JSON.stringify((await listDiagnoses(entry.id)).map((plan) => ({ id: plan.id, title: plan.title, roundId: plan.roundId, at: plan.at }))) }];
+    }
+    if (typeof args.plan !== 'string') throw new Error('方案 ID 必须是字符串');
+    if (args.task === undefined && (args.status !== undefined || args.note !== undefined)) throw new Error('记录验证结果时必须提供任务 ID');
+    const result = args.task === undefined ? await getDiagnosisVerification(entry.id, args.plan)
+      : await recordDiagnosisVerification(entry.id, args.plan, { taskId: args.task, status: args.status, note: args.note }, 'mcp');
+    return [{ type: 'text', text: JSON.stringify({ planId: result.plan.id, roundId: result.plan.roundId, tasks: result.plan.tasks ?? [], summary: result.summary, verification: result.verification, notice: '记录由填写者提供，不是自动检测结论；未知项保持待验证。' }) }];
+  }
   if (name === 'run_page_check') {
     let entry = await consoleProject(source);
     if (typeof args.base_url === 'string' && args.base_url.trim()) {
@@ -93,8 +129,9 @@ async function agentTool(source: string, name: string, args: Record<string, unkn
     const round = await latestRound(entry);
     if (!round) return [{ type: 'text', text: '这个项目还没有检测记录。先调用 run_page_check（需要项目在本机跑着）。' }];
     const { ruleText, pageRules } = await reviewContext(entry);
-    const tasks = reviewTasks(round, ruleText, pageRules);
-    if (!tasks.length) return [{ type: 'text', text: round.capture ? `第 ${round.number} 轮的截图都已经复核过了。` : `第 ${round.number} 轮没有截图（没设置预览地址或页面没打开），没有可以复核的。` }];
+    const available = await availableRoundScreenshots(entry.id, round);
+    const tasks = reviewTasks(available, ruleText, pageRules);
+    if (!tasks.length) return [{ type: 'text', text: available.capture?.screenshotsExpired ? `第 ${round.number} 轮截图已按 48 小时保留规则清理，请重新检测。` : round.capture ? `第 ${round.number} 轮的截图都已经复核过了。` : `第 ${round.number} 轮没有截图（没设置预览地址或页面没打开），没有可以复核的。` }];
     const limit = Math.min(12, Math.max(1, Number(args.limit) || 6));
     // Whole-page screens are large; at most two per call.
     const picked = [...tasks.filter((task) => task.kind === 'verify').slice(0, limit), ...tasks.filter((task) => task.kind === 'discover').slice(0, 2)].slice(0, limit);
@@ -123,7 +160,7 @@ ${discoverPrompt(task, pngSize(image))}
     const reviewedViews = (Array.isArray(args.reviewed_views) ? args.reviewed_views : []).map(String);
     const applied = applyReview(round, { verdicts, findings }, { by: 'AI 助手（MCP）', reviewedViews: [...new Set([...reviewedViews, ...findings.map((finding) => String(finding.view))])] });
     await updateRound(entry.id, round);
-    const left = reviewTasks(round, (await reviewContext(entry)).ruleText, []).length;
+    const left = reviewTasks(await availableRoundScreenshots(entry.id, round), (await reviewContext(entry)).ruleText, []).length;
     return [{ type: 'text', text: `已记录：复核 ${applied.verified} 个问题，新增 ${applied.found} 个看图发现的问题。${left ? `还有 ${left} 项待复核，可以再调用 review_screenshots。` : '这一轮都复核完了，结果在 uxqa 控制台里。'}` }];
   }
   return undefined;

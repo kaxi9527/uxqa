@@ -100,6 +100,7 @@ describe('page visual checks', () => {
   it('finds a button whose text wraps when the window narrows, and leaves opted-out buttons alone', () => {
     const wrap = byRule(main, 'visual/no-wrap');
     expect(wrap.map((violation) => violation.name)).toEqual([expect.stringMatching(/^「立即报名参加活动」按钮在 [\d、]+ 宽(及更窄)?时折成了两行$/)]);
+    expect(wrap[0].english).toMatchObject({ title: 'Control text wraps', what: expect.stringContaining('Viewport widths:') });
     expect(main.violations.some((violation) => violation.name.includes('允许换行'))).toBe(false);
   });
 
@@ -126,6 +127,7 @@ describe('page visual checks', () => {
     const tiny = byRule(main, 'visual/min-font-size');
     expect(tiny).toHaveLength(1);
     expect(tiny[0].name).toBe('「备注一」等 3 处字号只有 10px');
+    expect(tiny[0].english?.what).toContain('10');
   });
 
   it('marks every problem on a screenshot', async () => {

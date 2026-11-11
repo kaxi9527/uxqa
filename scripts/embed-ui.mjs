@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const files = [['/index.html', 'index.html', 'text/html; charset=utf-8'], ['/app.css', 'app.css', 'text/css; charset=utf-8'], ['/app.js', 'app.js', 'text/javascript; charset=utf-8']];
+const files = [['/index.html', 'index.html', 'text/html; charset=utf-8'], ['/app.css', 'app.css', 'text/css; charset=utf-8'], ['/workflow.js', 'workflow.js', 'text/javascript; charset=utf-8'], ['/access.js', 'access.js', 'text/javascript; charset=utf-8'], ['/app.js', 'app.js', 'text/javascript; charset=utf-8']];
 const entries = [];
 const icon = await readFile(join(root, 'assets/icon-256.png'));
 entries.push(`  "/icon.png": { type: "image/png", body: ${JSON.stringify(icon.toString('base64'))}, encoding: "base64" },`);

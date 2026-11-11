@@ -10,10 +10,10 @@ async function exists(path: string): Promise<boolean> {
   try { await access(path); return true; } catch { return false; }
 }
 
-/** Look for front-end projects under a folder (default: ~/Projects, else home). Read-only and bounded. */
+/** Look for front-end projects under a folder (default: ~/Projects). Read-only and bounded. */
 /** Where scanning starts when the user does not name a folder. */
 export async function defaultScanRoot(): Promise<string> {
-  return (await exists(join(homedir(), 'Projects'))) ? join(homedir(), 'Projects') : homedir();
+  return join(homedir(), 'Projects');
 }
 
 export async function discoverProjects(start?: string, limits = { depth: 4, dirs: 4000, results: 60 }): Promise<ProjectCandidate[]> {
@@ -23,7 +23,9 @@ export async function discoverProjects(start?: string, limits = { depth: 4, dirs
   async function visit(dir: string, depth: number): Promise<void> {
     if (depth > limits.depth || visited >= limits.dirs || found.length >= limits.results) return;
     visited++;
-    const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
+    let entries;
+    try { entries = await readdir(dir, { withFileTypes: true }); }
+    catch (error) { if (depth === 0) throw error; return; }
     const names = new Set(entries.map((entry) => entry.name));
     if (names.has('package.json')) {
       const library = names.has('components.json') ? '有 shadcn 组件库配置'

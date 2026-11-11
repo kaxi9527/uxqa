@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
-import { mkdtemp, mkdir, readdir, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -70,6 +70,32 @@ try {
   };
   assert.equal((await fetch(`${origin}/api/projects`)).status, 401);
   assert.equal((await fetch(`${origin}/icon.png`)).headers.get('content-type'), 'image/png');
+  assert.equal((await fetch(`${origin}/workflow.js`)).status, 200);
+  const quality = await api('/quality');
+  assert.equal(quality.procedures.length, 27, 'Native quality procedures are bundled');
+  assert.equal(quality.focuses.length, 10, 'Diagnosis goals are bundled');
+  assert.equal(quality.scenarioChecks, 81, 'Scenario checks are bundled');
+  assert.equal(quality.stackFamilies, 22, 'Stack guidance is bundled');
+  const product = join(work, 'verification-fixture');
+  await mkdir(join(product, 'src'), { recursive: true });
+  await writeFile(join(product, 'package.json'), JSON.stringify({ name: 'verification-fixture' }));
+  const fixtureSource = 'export default function Screen() { return <button>Save</button>; }';
+  await writeFile(join(product, 'src/Screen.tsx'), fixtureSource);
+  const project = (await api('/projects', { path: product, name: 'Isolated verification fixture' })).project;
+  let job = (await api(`/projects/${project.id}/check`, { skipPages: true })).job;
+  for (let attempt = 0; attempt < 100 && job.state === 'running'; attempt++) {
+    await new Promise((done) => setTimeout(done, 100));
+    job = (await api(`/projects/${project.id}/jobs/${job.id}`)).job;
+  }
+  assert.equal(job.state, 'done', 'Packaged source check produces a real round');
+  const plan = (await api(`/projects/${project.id}/diagnosis`, { focus: 'motion', roundId: job.roundId })).plan;
+  assert.ok(plan.tasks.length > 0, 'Packaged diagnostic plan contains tasks');
+  const verificationPath = `/projects/${project.id}/diagnosis/${plan.id}/verification`;
+  await api(verificationPath, { taskId: plan.tasks[0].id, status: 'failed', note: 'Synthetic smoke record: observation captured for fixture only.' });
+  const verified = await api(verificationPath);
+  assert.equal(verified.summary.failed, 1, 'Packaged verification evidence persists');
+  assert.equal(verified.summary.passed, 0, 'Recording evidence does not automatically pass tasks');
+  assert.equal(await readFile(join(product, 'src/Screen.tsx'), 'utf8'), fixtureSource, 'Verification leaves product source unchanged');
   assert.ok((await api('/ai/engine')).available, 'Bundled model core is available');
   const state = await api('/ai/native/state');
   assert.deepEqual(state.accounts, [], 'Fresh package never imports accounts');

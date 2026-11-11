@@ -51,7 +51,7 @@ afterAll(async () => {
 
 describe('local console', () => {
   it('serves the embedded page and keeps the generated assets in sync with src/ui/web', async () => {
-    for (const [route, file] of [['/index.html', 'index.html'], ['/app.css', 'app.css'], ['/app.js', 'app.js']]) {
+    for (const [route, file] of [['/index.html', 'index.html'], ['/app.css', 'app.css'], ['/app.js', 'app.js'], ['/workflow.js', 'workflow.js']]) {
       expect(ASSETS[route].body).toBe(await readFile(resolve('src/ui/web', file), 'utf8'));
     }
     const page = await fetch(`http://127.0.0.1:${consoleServer.port}/`);

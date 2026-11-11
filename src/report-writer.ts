@@ -75,6 +75,8 @@ export async function writeReports(result: RunResult, outDir: string): Promise<{
     '',
     '## Artifacts',
     '',
+    'UXQA 登记的截图保留 48 小时，运行期间或下次启动时清理；报告保留。 / UXQA-registered screenshots are cleaned after 48 hours while UXQA runs or on its next launch; this report remains.',
+    '',
     ...(result.artifacts.length === 0 ? ['No artifacts.'] : result.artifacts.map((artifact) => `- ${artifact}`)),
   ];
   await writeFile(jsonPath, JSON.stringify({ ...result, summary }, null, 2),{mode:0o600});

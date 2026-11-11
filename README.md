@@ -6,6 +6,9 @@
 
 [Download / 下载](https://github.com/kaxi9527/uxqa/releases/latest) · [安装与使用](docs/install-and-use.md) · [数据与权限说明](docs/local-data-and-permissions.md) · [Contribute](CONTRIBUTING.md) · [Report an issue](https://github.com/kaxi9527/uxqa/issues)
 
+[English installation and update guide](docs/install-and-use.en.md)
+ · [中文使用说明](docs/product-guide.zh-CN.md) · [English user guide](docs/product-guide.en.md) · [更新说明 / Release notes](docs/release-notes.zh-CN.md)
+
 UXQA 是一个本地运行的界面检查工具：检查组件复用、页面溢出与可访问性，保存截图和复现证据，并可选择连接模型做看图复核。模型接入中心把协议配置、订阅登录和账号管理放在同一个产品里。
 
 If UXQA helps you ship a better interface, a ⭐ helps others find it. Bug reports,
@@ -26,17 +29,16 @@ It runs Chromium through Playwright, checks page health and failed requests, eva
 **首次使用请看 [安装与使用说明](docs/install-and-use.md)**：选哪个包、Mac / Windows / Linux 解压启动、首次打开提示、第一次检测、更新卸载和常见故障。直接通过 GitHub 下载即可，无需应用商店。
 
 Download a versioned archive from [Releases](https://github.com/kaxi9527/uxqa/releases).
-Node and the UXQA model module are included. You do not need Magpie or a separate
-Node installation. The interface is currently Chinese; this README includes English
-developer instructions.
+Node and the UXQA model module are included; no separate Node installation is needed.
+The 0.5.0 interface offers Chinese and English; earlier releases may differ.
 
-| Computer | v0.4.0 download | Start |
+| Computer | Download from Releases | Start |
 | --- | --- | --- |
-| macOS 14+, Apple Silicon | [macOS arm64](https://github.com/kaxi9527/uxqa/releases/download/v0.4.0/UXQA-0.4.0-macOS-arm64.zip) | Open `UXQA.app` |
-| macOS 14+, Intel | [macOS x64](https://github.com/kaxi9527/uxqa/releases/download/v0.4.0/UXQA-0.4.0-macOS-x64.zip) | Open `UXQA.app` |
-| Windows 11+, x64 | [Windows x64](https://github.com/kaxi9527/uxqa/releases/download/v0.4.0/uxqa-0.4.0-win-x64.zip) | `Open uxqa console.cmd` |
-| Linux x64, glibc (Ubuntu 22.04/24.04 recommended) | [Linux x64](https://github.com/kaxi9527/uxqa/releases/download/v0.4.0/uxqa-0.4.0-linux-x64.tar.gz) | `./open-uxqa-console.sh` |
-| Linux ARM64, glibc | [Linux arm64](https://github.com/kaxi9527/uxqa/releases/download/v0.4.0/uxqa-0.4.0-linux-arm64.tar.gz) | `./open-uxqa-console.sh` |
+| macOS 14+, Apple Silicon | [macOS arm64](https://github.com/kaxi9527/uxqa/releases) | Open `UXQA.app` |
+| macOS 14+, Intel | [macOS x64](https://github.com/kaxi9527/uxqa/releases) | Open `UXQA.app` |
+| Windows 11+, x64 | [Windows x64](https://github.com/kaxi9527/uxqa/releases) | `Open uxqa console.cmd` |
+| Linux x64, glibc (Ubuntu 22.04/24.04 recommended) | [Linux x64](https://github.com/kaxi9527/uxqa/releases) | `./open-uxqa-console.sh` |
+| Linux ARM64, glibc | [Linux arm64](https://github.com/kaxi9527/uxqa/releases) | `./open-uxqa-console.sh` |
 
 macOS opens a native window. Windows/Linux open the same local UXQA console in your
 browser; keep the launcher terminal open and press Ctrl+C to quit. Windows ARM64
@@ -138,6 +140,22 @@ exec /path/to/uxqa/uxqa hook git --source "$(git rev-parse --show-toplevel)/path
 Known limits: rendered-page/source matching is heuristic, and similar-structure merging is not automatic. The download packages explicitly include the TypeScript runtime API. Source development requires the complete locked installation, including dev dependencies; this release is not an npm production-only package.
 
 ## Local Console (`uxqa ui`)
+
+The 0.5.0 source iteration organizes work as **项目 → 检查 → 问题处理 → 复检**.
+Native quality knowledge drives UI / UX / experience classification, screenshot
+diagnosis, repair instructions and verification. Seven additional browser rules
+inspect structure, accessible names, field labels and motion behavior. No external
+Skill directory or separate reference app is required.
+Choose **专项修复方案** in issue handling to create a saved, evidence-based plan
+for one of ten diagnostic goals. Native procedures, scenario checks and stack
+guidance inform the plan; pending checks stay unverified. The same capability is
+available through MCP `diagnose_quality`. Diagnosis never writes project source.
+Plans include per-task verification records with evidence and history. Use
+**逐项验证** or MCP `quality_verification` to record results; recorded passes and
+not-applicable decisions remain distinct from automatic checks. Failed tasks can
+prefill an observation in issue handling for confirmation.
+See the [quality workflow](docs/quality-workflow.md). This describes the source
+iteration; available downloads are the versions actually listed on Releases.
 
 ```bash
 uxqa ui                  # prints a link with an access token and opens it

@@ -1,11 +1,19 @@
 import type { Violation } from '../check/run.js';
+import type { QualityKind } from './quality.js';
 
 /** Visual rules generalised from the SynNovator redesign; kept free of browser code so rule files can be validated anywhere. */
 export type VisualKind = 'text-wrap' | 'text-clipped' | 'overlap' | 'page-overflow' | 'image-broken' | 'size-mismatch' | 'misaligned' | 'card-height' | 'tiny-text' | 'small-target' | 'title-orphan'
   | 'low-contrast' | 'text-overflow' | 'image-stretched' | 'tight-lines' | 'many-font-sizes' | 'mixed-radius' | 'mixed-button-height'
-  | 'long-text' | 'dead-opener';
+  | 'long-text' | 'dead-opener' | QualityKind;
 
 export const VISUAL_RULES: Record<VisualKind, { id: string; level: Violation['level']; title: string }> = {
+  'card-density': { id: 'visual/card-density', level: 'reference', title: '阅读层级需要核对' },
+  'unnamed-control': { id: 'visual/control-name', level: 'must', title: '操作缺少名称' },
+  'unlabelled-field': { id: 'visual/field-label', level: 'default', title: '输入项没有标签' },
+  'heading-order': { id: 'visual/heading-order', level: 'reference', title: '标题结构跳跃' },
+  'transition-all': { id: 'visual/transition-properties', level: 'reference', title: '过渡属性范围过大' },
+  'layout-animation': { id: 'visual/animation-layout', level: 'reference', title: '布局动画需要测量' },
+  'reduced-motion': { id: 'visual/reduced-motion', level: 'default', title: '未响应减弱动态偏好' },
   'text-wrap': { id: 'visual/no-wrap', level: 'must', title: '文字换行了' },
   'text-clipped': { id: 'visual/no-clip', level: 'must', title: '文字被截断了' },
   overlap: { id: 'visual/no-overlap', level: 'must', title: '叠在一起了' },

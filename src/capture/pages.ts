@@ -18,6 +18,8 @@ export interface PageTarget {
 export interface Shot { route: string; viewport: string; crop: string; full: string; matches: number }
 
 export interface Capture {
+  /** Transient display state: one or more screenshots were removed by retention. */
+  screenshotsExpired?: boolean;
   /** A box in screenshot pixels drawn by the console over the image (used for problems found by looking at screenshots). */
   mark?: { x: number; y: number; width: number; height: number };
   /** Number drawn on the screenshots; matches the problem's position in this round's list. */
@@ -34,6 +36,8 @@ export interface Capture {
 export interface CapturedPage { route: string; url: string; status: 'ok' | 'failed' | 'login' | 'blank'; error?: string; screenshot?: string; problems: number; /** Whether the page revealed which source files it loaded (development server). */ modulesKnown?: boolean }
 
 export interface CaptureReport {
+  /** Transient display state; the saved report remains unchanged. */
+  screenshotsExpired?: boolean;
   /** Whole-screen page screenshots kept for review by a vision model or the user's AI agent. */
   views?: PageView[];
   /** The same pages compared with the previous round (how much of each changed). */

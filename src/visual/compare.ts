@@ -7,7 +7,7 @@ import type { PageView } from './audit.js';
  * Used after merging look-alike blocks into a component, where the page should look exactly the same.
  * The diff image dims the new screenshot and paints changed pixels red.
  */
-export interface ViewChange { route: string; width: number; previousRound: string; previousImage: string; image: string; diff?: string; percent: number }
+export interface ViewChange { route: string; width: number; previousRound: string; previousImage: string; image: string; diff?: string; percent: number; imagesExpired?: boolean }
 
 const COMPARE_SCRIPT = `async ([before, after]) => {
   const load = (src) => new Promise((resolve, reject) => { const image = new Image(); image.onload = () => resolve(image); image.onerror = reject; image.src = src; });
