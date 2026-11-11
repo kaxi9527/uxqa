@@ -7,6 +7,7 @@
 - **怎么运行**：Mac 打开 `UXQA.app`；Windows 解压后双击 `Open uxqa console.cmd`；Linux 运行 `./open-uxqa-console.sh`。安装包自带 Node 和 UXQA 模型模块。Windows/Linux 使用浏览器显示本机界面，终端要保持打开。
 - **需要什么权限**：读取你选中的项目目录、在自己的用户目录保存配置和报告、访问你填写的预览网址。截图由浏览器完成，无需系统录屏、辅助功能、全盘访问、摄像头、麦克风或管理员权限。保存项目规则、基线或执行组件同步时才会写入对应项目文件。
 - **数据放哪里**：Mac/Linux 默认 `~/.uxqa`，Windows 默认 `%USERPROFILE%\.uxqa`。模型与订阅账号保存在其中的 `model-core`；直接 API 设置在 `ai.json`。命令行报告还可能保存在你指定的 `--out` 目录。凭据是本地文件，不等于经过系统钥匙串加密，不要上传整个数据目录。
+- **截图保留（0.5.0 起）**：应用截图和已登记的命令行截图按文件最后修改时间保留 48 小时；应用运行时每分钟检查，关闭期间到期的截图在下次启动应用或运行检查命令时清理。命令行会核对文件身份，保留后来修改或替换的文件；默认输出目录中可由历史报告确认的截图会在下次命令行检查时登记。旧自定义输出目录无法自动发现。检查记录、对比数值、非截图报告、手动另存的副本和项目文件保留；清理后需重新检测生成截图。浏览器 trace 压缩包不会被此规则删除，可能包含截图。
 - **什么时候联网**：打开预览页面会访问该页面及其资源；安装截图浏览器会从提示的官方来源下载；登录订阅会访问服务商。只有启用 AI 看图复核时，才会把所选截图及相关复核上下文发给你选择的模型服务。连接测试发送固定测试图。选择“不用”可关闭 AI 复核，源码规则检查仍能工作。
 - **模型登录限制**：ChatGPT/Codex、Copilot 等需要有效的个人账号与套餐；Claude 还需要已安装官方 Claude Code。公开版不内置其他应用的 Google OAuth 客户端信息，Gemini Code Assist/Antigravity 订阅登录需要自行配置获准使用的客户端；Gemini API 协议可以独立使用。
 - **退出和更新**：Mac 按 ⌘Q；Windows/Linux 在启动终端按 Ctrl+C。只关浏览器标签页不会停止服务。更新前退出并备份数据，再替换应用或解压新版；历史版本可在 Releases 中选择。
@@ -61,10 +62,15 @@ that changes system packages and is optional. UXQA itself must run as your norma
 | Data | Default location |
 | --- | --- |
 | Project list and console evidence | macOS/Linux `~/.uxqa`; Windows `%USERPROFILE%\.uxqa` |
+| Access observations and language choice (0.5.0+) | `access-settings.json` in the UXQA data root; stores selected paths, last observed status and time, language, and setup completion—not a copy of system permission settings |
+| Issue handling, manual observations and diagnostic plans | Under the same data root: `projects/<id>/issue-workflow.json`, `projects/<id>/diagnoses/` and per-plan evidence history in `projects/<id>/diagnosis-verification/`; separate from original check rounds |
 | Model settings, API keys, subscription tokens and model cache | Within the same data root; source-integrated account store is `model-core/` |
 | Project rules / accepted baseline | Selected project's `.uxqa/rules.json` / `.uxqa/baseline.json`, when explicitly saved |
 | CLI reports and screenshots | The `--out` directory or printed artifact path; these can be outside `~/.uxqa` |
+
 | Browser binaries | macOS `~/Library/Caches/ms-playwright`; Windows `%LOCALAPPDATA%\ms-playwright`; Linux `~/.cache/ms-playwright` |
+
+From 0.5.0, app screenshots and registered CLI screenshots expire 48 hours after their last modification time. UXQA checks every minute while open and catches up on the next launch or CLI check. CLI cleanup verifies file identity and retains files subsequently modified or replaced. Unchanged screenshots identified by historical reports in the default output directory are registered on the next CLI check; undiscovered old custom output directories cannot be recovered automatically. Findings, comparison values, non-image reports, manually saved copies and project files remain. Browser trace archives are retained and may contain screenshots.
 
 `UXQA_HOME` overrides the UXQA data root. `PLAYWRIGHT_BROWSERS_PATH` overrides the
 browser cache. A project entry references the existing source folder; it does not
@@ -72,11 +78,15 @@ copy or upload the whole repository. Reports can contain absolute source paths,
 page URLs, screenshot content and request/trace evidence. Treat reports and browser
 storage-state files as potentially private before sharing them.
 
+本地迭代中的首次引导允许逐个检查用户输入的项目目录；检查时实际打开目录并记录结果，不保存目录清单。UXQA 会在启动时重新检查之前可访问的位置，在开始项目检查时检查该项目；设置中可手动重试或仅移除访问记录。结果不是 macOS 系统授权清单，也不保证未来仍可访问。目录移动、网络卷不可用和权限拒绝分别显示；此机制不是实时权限监控。自动项目发现只会在用户点击扫描后读取 `~/Projects`。
+
 API keys and subscription tokens are local credential files, **not a promise of
 keychain-backed encryption**. Do not commit, upload or place the data root in a
 shared sync folder. Removing an account deletes UXQA's local saved account;
 revoking the provider's authorization is a separate action in that provider's settings.
 UXQA does not import or share another application's login directory.
+
+专项诊断读取本地检查记录、项目依赖清单和内置知识，在上述数据目录保存方案；不发送模型请求、不运行工程脚本、不修改项目源码。可选 AI 截图复核和复制方案后交给其他 AI 的行为另按下面的联网说明处理。
 
 ## 哪些功能联网、发送什么
 

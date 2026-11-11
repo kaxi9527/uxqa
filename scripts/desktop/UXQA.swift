@@ -1,29 +1,22 @@
 import AppKit
 import WebKit
 
-final class Desktop: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUIDelegate {
+final class Desktop: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
     var process: Process?
     var input: Pipe?
     var output = Data()
     var windows: [NSWindow] = []
     var mainOrigin: String?
     var terminating = false
+    var english = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        let menu = NSMenu()
-        let appItem = NSMenuItem()
-        let appMenu = NSMenu()
-        appMenu.addItem(withTitle: "退出 UXQA", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
-        appItem.submenu = appMenu
-        menu.addItem(appItem)
-        let editItem = NSMenuItem()
-        let edit = NSMenu(title: "编辑")
-        for (title, action, key) in [("撤销", "undo:", "z"), ("剪切", "cut:", "x"), ("复制", "copy:", "c"), ("粘贴", "paste:", "v"), ("全选", "selectAll:", "a")] {
-            edit.addItem(withTitle: title, action: Selector(action), keyEquivalent: key)
+        let home = ProcessInfo.processInfo.environment["UXQA_HOME"] ?? NSHomeDirectory() + "/.uxqa"
+        if let data = try? Data(contentsOf: URL(fileURLWithPath: home).appendingPathComponent("access-settings.json")),
+           let settings = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            english = settings["locale"] as? String == "en"
         }
-        editItem.submenu = edit
-        menu.addItem(editItem)
-        NSApp.mainMenu = menu
+        updateMenus()
         let resources = Bundle.main.resourceURL!
         let child = Process()
         child.executableURL = resources.appendingPathComponent("runtime/node")
@@ -60,19 +53,47 @@ final class Desktop: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUI
             DispatchQueue.main.async {
                 guard let self = self else { return }
                 if self.terminating { NSApp.reply(toApplicationShouldTerminate: true) }
-                else { self.error("本地服务已退出。请重新打开 UXQA；已有项目和检测记录仍保存在本机。") }
+                else { self.error(self.english ? "The local service stopped. Reopen UXQA; your projects and check records remain on this computer." : "本地服务已退出。请重新打开 UXQA；已有项目和检测记录仍保存在本机。") }
             }
         }
         process = child
         do { try child.run() }
-        catch { self.error("无法启动内置运行时，请重新解压完整的 UXQA.app。") }
+        catch { self.error(english ? "The bundled runtime could not start. Extract the complete UXQA.app again." : "无法启动内置运行时，请重新解压完整的 UXQA.app。") }
         DispatchQueue.main.asyncAfter(deadline: .now() + 25) { [weak self] in
             guard let self = self, self.windows.isEmpty, !self.terminating else { return }
-            self.error("应用启动超时，请关闭后重试。")
+            self.error(self.english ? "Startup timed out. Close UXQA and try again." : "应用启动超时，请关闭后重试。")
         }
     }
 
+    func updateMenus() {
+        let menu = NSMenu()
+        let appItem = NSMenuItem()
+        let appMenu = NSMenu()
+        appMenu.addItem(withTitle: english ? "Quit UXQA" : "退出 UXQA", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        appItem.submenu = appMenu
+        menu.addItem(appItem)
+        let editItem = NSMenuItem()
+        let edit = NSMenu(title: english ? "Edit" : "编辑")
+        for (title, action, key) in [(english ? "Undo" : "撤销", "undo:", "z"), (english ? "Cut" : "剪切", "cut:", "x"), (english ? "Copy" : "复制", "copy:", "c"), (english ? "Paste" : "粘贴", "paste:", "v"), (english ? "Select All" : "全选", "selectAll:", "a")] {
+            edit.addItem(withTitle: title, action: Selector(action), keyEquivalent: key)
+        }
+        editItem.submenu = edit
+        menu.addItem(editItem)
+        NSApp.mainMenu = menu
+    }
+
+    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        guard message.name == "uxqaLanguage", message.frameInfo.isMainFrame,
+              message.frameInfo.securityOrigin.host == "127.0.0.1",
+              message.frameInfo.securityOrigin.port == URL(string: mainOrigin ?? "")?.port,
+              let locale = message.body as? String, ["zh", "en"].contains(locale) else { return }
+        english = locale == "en"
+        updateMenus()
+    }
+
     @discardableResult func window(url: URL, title: String, configuration: WKWebViewConfiguration = WKWebViewConfiguration()) -> WKWebView {
+        configuration.userContentController.removeScriptMessageHandler(forName: "uxqaLanguage")
+        configuration.userContentController.add(self, name: "uxqaLanguage")
         let web = WKWebView(frame: .zero, configuration: configuration)
         web.navigationDelegate = self
         web.uiDelegate = self
@@ -98,7 +119,7 @@ final class Desktop: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUI
 
     func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for action: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
         guard let url = action.request.url else { return nil }
-        if url.scheme == "http", url.host == "127.0.0.1" { return window(url: url, title: "UXQA · 模型连接中心", configuration: configuration) }
+        if url.scheme == "http", url.host == "127.0.0.1" { return window(url: url, title: english ? "UXQA · Model connections" : "UXQA · 模型连接中心", configuration: configuration) }
         if ["https", "http"].contains(url.scheme ?? "") { NSWorkspace.shared.open(url) }
         return nil
     }
@@ -107,7 +128,7 @@ final class Desktop: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUI
         let alert = NSAlert(); alert.messageText = message; alert.runModal(); completionHandler()
     }
     func webView(_ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (Bool) -> Void) {
-        let alert = NSAlert(); alert.messageText = message; alert.addButton(withTitle: "确认"); alert.addButton(withTitle: "取消")
+        let alert = NSAlert(); alert.messageText = message; alert.addButton(withTitle: english ? "Confirm" : "确认"); alert.addButton(withTitle: english ? "Cancel" : "取消")
         completionHandler(alert.runModal() == .alertFirstButtonReturn)
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }

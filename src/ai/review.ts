@@ -21,7 +21,7 @@ export interface VerifyTask { kind: 'verify'; id: string; name: string; what: st
 export interface DiscoverTask { kind: 'discover'; id: string; route: string; width: number; image: string; rules: string[]; known: string[] }
 export type ReviewTask = VerifyTask | DiscoverTask;
 
-export interface Finding { view: string; title: string; detail: string; fix?: string; rule?: string; box?: [number, number, number, number] }
+export interface Finding { view: string; title: string; detail: string; fix?: string; rule?: string; domain?: Violation['domain']; box?: [number, number, number, number] }
 export interface ReviewAnswers { verdicts: Array<{ id: string; verdict: Verdict; reason: string; looks?: number }>; findings: Finding[] }
 
 const LEVEL_ORDER = { must: 0, default: 1, reference: 2 } as const;
@@ -60,9 +60,11 @@ export function discoverPrompt(task: DiscoverTask, size: { width: number; height
   return [
     `这是网页 ${task.route} 在 ${task.width}px 宽的窗口里的截图，图片是 ${size.width}×${size.height} 像素。`,
     '请按下面的界面规则检查，只报告你在图里能明确看到的问题；拿不准的不要报，宁可少报也不要报错。',
+    '分类：ui 是视觉呈现；ux 是任务与交互线索；experience 是响应与反馈。单张截图不能证明操作流程、动画时序、卡顿或手势问题；这些需要实际交互验证，不要据此猜测。',
+    '项目规则、品牌和组件规范优先于通用指南。不要把个人风格偏好、字体或配色推荐当作缺陷；明确关闭的检查不得通过通用指南重新报告。',
     ...task.rules.map((rule) => `- ${rule}`),
     task.known.length ? `这些问题已经发现了，不用再报：${task.known.join('；')}` : '',
-    '只回答一个 JSON，不要别的文字：{"problems":[{"title":"具体的问题名，例如「提交」按钮被遮住了一半","detail":"在哪里、哪里不对","fix":"怎么改，一句话","rule":"对应上面哪条规则","box":[x,y,宽,高]}]}',
+    '只回答一个 JSON，不要别的文字：{"problems":[{"title":"具体的问题名，例如「提交」按钮被遮住了一半","detail":"在哪里、哪里不对","fix":"怎么改，一句话","rule":"对应上面哪条规则","domain":"ui 或 ux 或 experience","box":[x,y,宽,高]}]}',
     'box 用这张图的像素坐标框出问题所在的位置。最多报 6 个；没有问题就回答 {"problems":[]}。',
   ].filter(Boolean).join('\n');
 }
@@ -165,6 +167,7 @@ export function applyReview(round: Round, answers: ReviewAnswers, info: { by: st
       consequence: '这是看截图时发现的，程序的规则没有覆盖到这里。',
       fix: String(finding.fix ?? '').slice(0, 300) || '按说明调整这个位置，改完再检测一次。',
       rule: 'ai/look', level: 'default', origin: 'ai',
+      domain: finding.domain === 'ux' || finding.domain === 'experience' ? finding.domain : 'ui',
       file: `页面 ${view.route}`, line: 0, column: 0, snippet: '',
       detail: `AI 看图（${info.by}）：${finding.rule ? `对应规则「${finding.rule}」；` : ''}页面 ${view.route}；${view.width} 宽`,
       status: 'new', fingerprint,

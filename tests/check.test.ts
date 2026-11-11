@@ -280,7 +280,7 @@ describe('command line and hooks', () => {
     const result = await run(['mcp', '--source', product], `${lines}\n`);
     const replies = result.stdout.trim().split('\n').map((line) => JSON.parse(line));
     expect(replies.map((reply) => reply.id)).toEqual([1, 2, 3, 4]);
-    expect(replies[1].result.tools.map((tool: { name: string }) => tool.name)).toEqual(['find_component', 'list_components', 'get_rules', 'check_files', 'run_page_check', 'review_screenshots', 'submit_screenshot_review']);
+    expect(replies[1].result.tools.map((tool: { name: string }) => tool.name)).toEqual(['diagnose_quality', 'quality_verification', 'find_component', 'list_components', 'get_rules', 'check_files', 'run_page_check', 'review_screenshots', 'submit_screenshot_review']);
     expect(replies[2].result.content[0].text).toContain('import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"');
     expect(replies[3].result.content[0].text).toContain('src/pages/Orders.tsx:7');
   }, 30_000);

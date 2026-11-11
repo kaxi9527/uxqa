@@ -14,6 +14,8 @@ import type { HarnessConfig } from './types.js';
 import { discoverLibrary } from './library/discovery.js';
 import { prepareComponentPlan, syncComponentPlan } from './library/workflow.js';
 import { describeError, runSourceCommand, SOURCE_COMMANDS } from './check-cli.js';
+import { registerExportedScreenshots, registerHistoricalScreenshots } from './ui/exported-screenshot-retention.js';
+import { cleanExpiredScreenshots } from './ui/screenshot-retention.js';
 
 async function readStdin(): Promise<string> {
   if (process.stdin.isTTY) return '';
@@ -53,6 +55,10 @@ async function main(): Promise<void> {
   }
   const runId = `${new Date().toISOString().replace(/[:.]/g,'-')}-${randomUUID().slice(0,8)}`;
   const outDir = args.out ? resolve(args.out) : resolve(process.env.UXQA_OUTPUT_ROOT ?? 'artifacts',runId);
+  if (args.command === 'run' || args.command === 'components') {
+    try { await registerHistoricalScreenshots(resolve(process.env.UXQA_OUTPUT_ROOT ?? 'artifacts')); await cleanExpiredScreenshots(); }
+    catch (error) { console.error(`Screenshot cleanup failed; it will be retried: ${error instanceof Error ? error.message : String(error)}`); }
+  }
   let config: HarnessConfig | undefined;
   if (args.url || args.config) {
     let raw: unknown = args.config ? JSON.parse(await readFile(resolve(args.config),'utf8')) : {baseUrl:args.url};
@@ -86,6 +92,8 @@ async function main(): Promise<void> {
   }
   if (args.command === 'components') {
     const result = await auditComponents(config,{outDir,headed:args.headed,sourceDir:args.source,selector:args.selector,designTokens:args.designTokens,libraryDir:args.library});
+    try { await registerExportedScreenshots(outDir, result.observations.flatMap((item) => item.screenshot ? [item.screenshot] : [])); }
+    catch (error) { console.error(`Could not register screenshots for cleanup: ${error instanceof Error ? error.message : String(error)}`); }
     const reports = await writeComponentReports(result,outDir);
     console.log(`Component audit ${result.status}: ${result.candidates.length} cross-page candidates, ${result.source?.duplicates.length ?? 0} source clone pairs`);
     console.log(`HTML: ${reports.htmlPath}\nJSON: ${reports.jsonPath}\nMarkdown: ${reports.markdownPath}`);
@@ -93,6 +101,8 @@ async function main(): Promise<void> {
     return;
   }
   const result = await runAudit(config!, { outDir, headed: args.headed });
+  try { await registerExportedScreenshots(outDir, result.artifacts.filter((path) => path.toLowerCase().endsWith('.png'))); }
+  catch (error) { console.error(`Could not register screenshots for cleanup: ${error instanceof Error ? error.message : String(error)}`); }
   const reports = await writeReports(result, outDir);
   const summary = summarizeRun(result);
   console.log(`UXQA ${summary.status}: ${summary.blocking} blocking, ${summary.informational} informational`);

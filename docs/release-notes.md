@@ -1,10 +1,36 @@
-UXQA's first public release combines deterministic frontend checks, local browser
-evidence and an optional model access center in one product.
+## UXQA 0.5.0
+
+### 中文
+
+本版将检查流程整理为项目、检查、问题处理和复检，并把界面与体验诊断知识融入检查与修复方案。首次启动可选择中文或 English，查看访问说明并逐项检查目录；设置显示最近的访问结果，系统授权可能变化。
+
+应用截图和已登记的命令行截图在 48 小时后清理：应用运行时定期检查，关闭期间到期的截图在下次启动或执行检查时处理。报告和手动另存的副本保留；旧自定义输出目录及浏览器 trace 压缩包不会自动发现或清理。
+
+各系统安装与限制详见 [中文安装说明](https://github.com/kaxi9527/uxqa/blob/main/docs/install-and-use.md) 和 [完整中文更新说明](https://github.com/kaxi9527/uxqa/blob/main/docs/release-notes.zh-CN.md)。各平台打包、真实系统授权和订阅登录的验证范围以实际结果为准。
+
+### English
+
+Choose Chinese or English on first launch, review the requested access and check
+selected project folders. Settings show the latest observed access and support
+rechecking; the operating system owns its grants and they can change. Historical
+findings, project content and provider messages retain their original language.
+
+This iteration also adds 48-hour retention for app screenshots and registered
+CLI screenshots. Cleanup runs while UXQA is open and on the next launch or CLI
+check; findings and manually saved copies remain. Previously unregistered custom
+output directories cannot be discovered automatically.
+
+Built-in quality procedures drive
+classification, screenshot diagnosis, repair instructions and verification.
+Seven new browser checks cover information structure, naming, labels and motion.
+Workflow navigation, manual observations, handling records and evidence-aware
+rechecks are integrated in UXQA. No external Skill directory or reference browser
+is required.
 
 - Native macOS app: Apple Silicon and Intel, macOS 14+.
 - Portable Windows x64 and Linux x64/ARM64: bundled runtime, local browser UI.
-- Built-in protocol adapters, provider configuration and independent subscription
-  account management. No separate Magpie application is needed.
+- Built-in protocol adapters, provider configuration and subscription account
+  management, integrated directly into UXQA.
 - New interface-inspector icon, contribution guide, issue/PR templates, privacy and
   permissions documentation. Future tags produce the same five-package matrix.
 
@@ -13,12 +39,12 @@ whole folder. Start UXQA.app on Mac, Open uxqa console.cmd on Windows, or
 ./open-uxqa-console.sh on Linux. Browser screenshot components are optional and
 downloaded only after confirmation.
 
-Build/verification: each package is built and runtime-smoked on its native CI
-OS/architecture. Fixture tests check CLI/UI, authentication, independent accounts,
-provider/model discovery and shutdown. These are automated runner checks, not a
-claim of manual testing on every OS version or live login with every provider.
+Build/verification: the release workflow builds and runtime-smokes packages on
+their target CI systems. Review the actual workflow result for this version.
+Fixture tests do not establish real system permission changes, manual operation on
+every OS version or live login with every provider.
 
-Limits: interface copy is currently Chinese. macOS uses ad-hoc signing without
+Limits: macOS uses ad-hoc signing without
 Apple notarization; Windows has no Authenticode signature. Windows ARM64 and Linux
 musl have no native package in this release. Subscription access depends on your
 account/provider; Claude subscriptions require official Claude Code. Google

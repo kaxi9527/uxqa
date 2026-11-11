@@ -9,16 +9,23 @@ import type { Rule, RuleLevel, RuleSet } from '../rules/types.js';
 import { readBaseline, type Baseline } from './baseline.js';
 import { colorExamples, describeVariants, elementLabel, importHint, pxText, quote, sizeKind, isFontSizePrefix, isSpacingPrefix, nearestColorToken, nearestSize, type PlainMessage } from './messages.js';
 import type { AiNote } from '../ai/review.js';
+import type { IssueDomain } from '../guidance/types.js';
 import { HINT_RULES } from './hints.js';
+import { ENGLISH_HINTS } from './hints.en.js';
+import { ENGLISH_RULES } from '../rules/catalog.en.js';
 import { matchVariants, variantAdvice } from './variants.js';
 import { planMerge, type Site } from './merge.js';
 import { isScannable, listProductFiles, scanFile, type Observation, type ScannedFile } from './scan.js';
 
 export interface Violation extends PlainMessage {
+  /** Localized product-authored message, when available; project-supplied text stays unchanged. */
+  english?: PlainMessage;
+  /** Primary issue domain; old reports derive this from their rule without rewriting history. */
+  domain?: IssueDomain;
   rule: string;
   level: Exclude<RuleLevel, 'off'>;
   /** 'ai' marks a problem found by looking at screenshots (vision model or the user's agent), not by a rule program. */
-  origin: Rule['origin'] | 'ai';
+  origin: Rule['origin'] | 'ai' | 'manual';
   file: string;
   line: number;
   column: number;
@@ -182,6 +189,13 @@ function repeatedPatterns(rule: Rule, inventory: Inventory, patterns: Pattern[],
       fix: rule.origin === 'project' && rule.fix ? rule.fix
         : group.kind === 'same' ? '把这一段做成组件库里的一个组件，起一个说明用途的名字，各处改成引用它。'
         : '把它做成组件库里的一个组件，几处不同的样子做成这个组件的不同样式选项，各处改成引用它。',
+      english: {
+        name: `${items.length} ${group.kind === 'same' ? 'identical' : 'similar'} blocks may be a component`,
+        title: 'Repeated structure',
+        what: `${items.length} ${group.kind === 'same' ? 'identical' : 'similar'} blocks appear in ${fileSet.size} files. Other locations: ${others.map((item) => `${item.file}:${item.line}`).join(', ')}.`,
+        consequence: 'Separate copies can become inconsistent when changed.',
+        fix: rule.origin === 'project' && rule.fix ? rule.fix : group.kind === 'same' ? 'Create a descriptively named library component and reuse it at each location.' : 'Create a reusable library component, model the differences as variants, and use it at each location.',
+      },
       detail: `${group.kind === 'same' ? '相同结构' : '相近结构（样式类重合 ≥ 60%）'}，每处 ${report.size} 个元素：${items.map((item) => `${item.file}:${item.line}-${item.endLine}`).join('，')}`,
       subject: `${group.kind}:${group.key}`,
       anchor: 'pattern',
@@ -220,6 +234,13 @@ function applyRule(rule: Rule, inventory: Inventory, files: ScannedFile[], allDe
           what: `这里手写了一个${label}（${elementText(observation)}），组件库里已经有现成的${label}：${component.name}。`,
           consequence: `以后改${label}的样子，这里不会跟着变，页面之间会越来越不一致。`,
           fix: rule.origin === 'project' && rule.fix ? rule.fix : match ? variantAdvice(component, match, component.library) : `换成${component.library ? `组件库「${component.library}」` : '组件库'}里的 ${component.name}${variants ? `（${variants}）` : ''}。`,
+          english: {
+            name: `${observation.text ? `“${observation.text}”: ` : ''}Use ${component.name} from the component library`,
+            title: 'Existing component not reused',
+            what: `A handwritten <${observation.tag}> is used where the library provides ${component.name}.`,
+            consequence: 'This implementation will not follow changes to the library component.',
+            fix: rule.origin === 'project' && rule.fix ? rule.fix : `Use ${component.name}${component.library ? ` from ${component.library}` : ' from the component library'}.${match ? ` Suggested props: ${JSON.stringify(match.props)}.${match.leftover.length ? ` Review unmatched styles: ${match.leftover.join(', ')}.` : ''}` : ''}`,
+          },
           subject: elementText(observation),
           locate: { tag: observation.tag, ...(observation.role ? { role: observation.role } : {}), ...(observation.inputType ? { inputType: observation.inputType } : {}), classes: observation.classes, ...(observation.text ? { text: observation.text } : {}) },
           detail: `${elementText(observation)} → ${component.name}，${importHint(component, inventory)}；组件定义在 ${component.file}`,
@@ -248,6 +269,7 @@ function applyRule(rule: Rule, inventory: Inventory, files: ScannedFile[], allDe
               what: `这里又定义了一个 ${name}，组件库里已经有一个（${preferred?.file ?? libraryOnes[0].file}）。`,
               consequence: `两个 ${name} 会越改越不一样，改了组件库里的，这里不会变。`,
               fix: `删掉这里自己写的 ${name}，改成从组件库引入 ${name}（${preferred?.file ?? libraryOnes[0].file}），把这个文件里用到它的地方一起改过去；如果它和组件库的 ${name} 用途不同，就改一个能说明用途的名字。`,
+              english: { name: `${name} duplicates a library component`, title: 'Duplicate component', what: `${name} is also defined in ${preferred?.file ?? libraryOnes[0].file}.`, consequence: 'The implementations can diverge independently.', fix: `Use ${name} from the library and update its callers, or give this component a distinct name if it serves a different purpose.` },
               subject: `definition:${name}`,
               detail: `同名组件：${definition.file}:${definition.line} 与 ${preferred?.file ?? libraryOnes[0].file}`,
               file: definition.file, line: definition.line, column: definition.column, snippet: definition.snippet,
@@ -265,6 +287,7 @@ function applyRule(rule: Rule, inventory: Inventory, files: ScannedFile[], allDe
             what: `组件库里有两个 ${name}：${preferred?.file} 和这里。`,
             consequence: `不同页面可能用到不同的 ${name}，改一个另一个不会变。`,
             fix: `先对比这两个的写法：如果用途一样，删掉这里的定义，改成从 ${preferred?.file} 引入 ${name}，并把用到这里的地方都改过去；如果用途不同，给这里的改一个能说明用途的名字（例如 Compact${name}），并说明它和 ${name} 的区别。`,
+            english: { name: `The library has multiple ${name} components`, title: 'Duplicate component', what: `${name} is also defined in ${preferred?.file}.`, consequence: 'Different pages can use separate implementations that diverge.', fix: `Compare the implementations. Reuse ${name} from ${preferred?.file} if their purpose is the same; otherwise rename this component to explain its distinct purpose.` },
             subject: `definition:${name}`,
             detail: `组件库内同名组件：${definition.file}:${definition.line} 与 ${preferred?.file}`,
             file: definition.file, line: definition.line, column: definition.column, snippet: definition.snippet,
@@ -283,6 +306,13 @@ function applyRule(rule: Rule, inventory: Inventory, files: ScannedFile[], allDe
           what: `这里直接写了颜色 ${observation.value}，没有用项目统一定义的颜色。`,
           consequence: '以后换主题色或做深色模式时，这里不会跟着变。',
           fix: rule.origin === 'project' && rule.fix ? rule.fix : token ? `改用项目颜色 ${token}（和 ${observation.value} 最接近）。` : `改用项目统一定义的颜色${examples ? `，例如 ${examples}` : ''}。`,
+          english: {
+            name: `${observation.context === 'css' ? 'Stylesheet' : observation.context === 'style' ? 'Inline style' : observation.text ? `“${observation.text}”` : observation.tag || 'Element'} uses hard-coded color ${observation.value}`,
+            title: 'Hard-coded color',
+            what: `Color ${observation.value} is written directly instead of using a project color token.`,
+            consequence: 'This color will not follow theme or dark-mode changes.',
+            fix: rule.origin === 'project' && rule.fix ? rule.fix : token ? `Use project color ${token}, the closest match to ${observation.value}.` : 'Use a color defined by the project.',
+          },
           subject: observation.value,
           ...(observation.token ? { locate: { token: observation.token, ...(observation.classes ? { classes: observation.classes } : {}), ...(observation.tag ? { tag: observation.tag } : {}), ...(observation.text ? { text: observation.text } : {}) } } : {}),
           detail: `${observation.context === 'class' ? '任意值类名' : observation.context === 'style' ? '行内样式' : 'CSS 声明'}：${observation.value}${token ? `；最接近的颜色变量 --${token}` : ''}`,
@@ -306,6 +336,7 @@ function applyRule(rule: Rule, inventory: Inventory, files: ScannedFile[], allDe
             what: `这里的 ${observation.raw} 是 ${observation.px}px，项目规定只能用${allowedText}。`,
             consequence: '间距或字号会出现一两像素的不齐，页面看起来不整齐。',
             fix: rule.fix ?? (nearestSize(observation.prefix, observation.px) ? `改成${nearestSize(observation.prefix, observation.px)}。` : '改成允许范围里最接近的值。'),
+            english: { name: `${observation.raw} is outside the configured size scale`, title: 'Size outside the scale', what: `${observation.raw} is ${observation.px}px; allowed values are ${rule.allowed === 'multiple-of-4' ? 'multiples of 4px' : `${(rule.allowed as number[]).join(', ')}px`}.`, consequence: 'Inconsistent dimensions can disrupt alignment.', fix: rule.fix ?? 'Use the closest value permitted by the project scale.' },
             subject: observation.raw,
           ...(observation.token ? { locate: { token: observation.token, ...(observation.classes ? { classes: observation.classes } : {}), ...(observation.tag ? { tag: observation.tag } : {}), ...(observation.text ? { text: observation.text } : {}) } } : {}),
             detail: `${observation.raw}（${observation.px}px），规则 ${rule.id}`,
@@ -322,6 +353,7 @@ function applyRule(rule: Rule, inventory: Inventory, files: ScannedFile[], allDe
           fix: rule.origin === 'project' && rule.fix ? rule.fix
             : nearest ? (observation.context === 'style' ? `去掉行内样式，改用类名 ${nearest.replace(/^最接近的统一档位 /, '')}。` : `改成${nearest}。`)
             : /^(max|min)-/.test(observation.prefix ?? '') ? '如果这是特意定的宽度上限，用忽略注释写明理由；否则改用项目统一的尺寸档位。' : '改用项目统一的尺寸档位。',
+          english: { name: `Hard-coded size ${observation.raw}`, title: 'Hard-coded size', what: `${observation.raw} is written directly instead of using the project size scale.`, consequence: 'The value will not follow a shared scale change.', fix: rule.origin === 'project' && rule.fix ? rule.fix : nearest ? `Use the nearest scale value ${nearest.match(/[a-z][a-z0-9-]*/i)?.[0] ?? ''} and verify it fits.` : /^(max|min)-/.test(observation.prefix ?? '') ? 'Use the shared size scale, or document an intentional limit with an ignore reason.' : 'Use a value from the project size scale.' },
           subject: observation.raw,
           ...(observation.token ? { locate: { token: observation.token, ...(observation.classes ? { classes: observation.classes } : {}), ...(observation.tag ? { tag: observation.tag } : {}), ...(observation.text ? { text: observation.text } : {}) } } : {}),
           detail: `${observation.context === 'class' ? '任意值类名' : '行内样式'}：${observation.raw}（${observation.px}px）`,
@@ -375,6 +407,13 @@ function applyRule(rule: Rule, inventory: Inventory, files: ScannedFile[], allDe
           what: hint.what(observation),
           consequence: hint.consequence,
           fix: rule.origin === 'project' && rule.fix ? rule.fix : hint.fix(observation),
+          english: {
+            name: `${observation.text ? `“${observation.text}”: ` : ''}${ENGLISH_HINTS[observation.check]}`,
+            title: ENGLISH_HINTS[observation.check],
+            what: `${ENGLISH_HINTS[observation.check]}.${observation.tag ? ` Element: <${observation.tag}>.` : ''}${observation.detail ? ` Observed: ${observation.detail}.` : ''}`,
+            consequence: ENGLISH_RULES[hint.id]?.[1] ?? '',
+            fix: rule.origin === 'project' && rule.fix ? rule.fix : ENGLISH_RULES[hint.id]?.[0] ?? '',
+          },
           subject: `${observation.check}:${observation.text ?? ''}:${observation.detail ?? ''}:${observation.snippet}`,
           ...(observation.tag || observation.classes?.length || observation.text ? { locate: { ...(observation.tag && /^[a-z]/.test(observation.tag) ? { tag: observation.tag } : {}), ...(observation.classes?.length ? { classes: observation.classes } : {}), ...(observation.text ? { text: observation.text } : {}) } } : {}),
           detail: `${hint.title}${observation.detail ? `：${observation.detail}` : ''}`,

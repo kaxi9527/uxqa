@@ -1,4 +1,5 @@
 import type { CheckResult, Violation } from './run.js';
+import { issueGuidance } from '../guidance/issues.js';
 
 const LEVEL_WORD: Record<Violation['level'], string> = { must: '需要改', default: '建议改', reference: '可以看看' };
 
@@ -25,7 +26,7 @@ export function formatText(result: CheckResult, options: { limit?: number } = {}
   }
   lines.push(library);
   if (result.baseline && (result.summary.baseline || result.baseline.fixed)) {
-    lines.push(`老问题：${result.summary.baseline} 个已记录在基线里，这次不算${result.baseline.fixed ? `；有 ${result.baseline.fixed} 个老问题已经修好了` : ''}。`);
+    lines.push(`老问题：${result.summary.baseline} 个已记录在基线里，这次不算${result.baseline.fixed ? `；有 ${result.baseline.fixed} 个老问题本轮未再检出，需结合覆盖范围确认` : ''}。`);
   }
   if (fresh.length) {
     lines.push('');
@@ -49,13 +50,17 @@ const PRIORITY: Record<Violation['level'], string> = { must: '【需要改】', 
 /** One problem as a self-contained instruction an AI can follow without knowing uxqa. */
 function promptBlock(violation: Violation, index: number): string[] {
   const pageOnly = violation.line === 0;
+  const guidance = issueGuidance(violation);
   const lines = [`问题 ${index}${PRIORITY[violation.level]}：${violation.name}`];
   lines.push(pageOnly ? `- 位置：${violation.file}（页面上看到的问题，没能确定是哪一行代码；请在代码里搜索这段文字：${violation.snippet || '见下面的说明'}）` : `- 位置：${violation.file}:${violation.line}（第 ${violation.line} 行）`);
+  lines.push(`- 分类：${guidance.label}；证据：${guidance.evidence}`);
   if (!pageOnly && violation.snippet) lines.push(`- 现在的代码：${violation.snippet}`);
   lines.push(`- 问题：${violation.what}`);
   lines.push(`- 要改成：${violation.fix}`);
   if (violation.suggestion) lines.push(`- 引入方式：${violation.suggestion.importHint}`);
   lines.push(`- 为什么：${violation.consequence}`);
+  lines.push(`- 处理原则（${guidance.guide.title}）：${guidance.guide.fix}`);
+  lines.push(`- 复检要求：${guidance.guide.verify}`);
   if (violation.ai) lines.push(`- 看图复核（${violation.ai.by}）：${violation.ai.verdict === 'real' ? '截图里确实有这个问题' : violation.ai.verdict === 'not-real' ? '截图里看起来没有这个问题，请先确认再决定改不改' : '截图里看不准'}${violation.ai.reason ? `——${violation.ai.reason}` : ''}`);
   if (violation.origin === 'ai') lines.push('- 来源：这是看截图时发现的问题，不是程序规则查出来的；请先在页面上确认。');
   if (violation.plan?.length) lines.push('- 合并方案：', ...violation.plan.map((step) => `  ${step}`));

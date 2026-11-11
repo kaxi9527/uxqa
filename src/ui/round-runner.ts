@@ -13,6 +13,8 @@ import { getRound, listRounds, newRoundId, saveRound, shotsDir, updateRound, typ
 import { compareViews } from '../visual/compare.js';
 import { createHash } from 'node:crypto';
 import { browserReady, MISSING_SENTENCE } from '../browser/install.js';
+import { screenshotGuidance } from '../guidance/catalog.js';
+import { availableRoundScreenshots } from './screenshot-retention.js';
 
 /** One full check of a project: source, page screenshots, page checks, and (when configured) the screenshot review. */
 export interface RoundProgress { phase: 'source' | 'pages' | 'ai' | 'saving'; message: string; done?: number; total?: number }
@@ -66,7 +68,8 @@ export async function runRound(entry: ProjectEntry, options: { signal?: AbortSig
         let previous: Round | undefined;
         for (const summary of (await listRounds(entry.id)).slice(0, 5)) {
           const round = await getRound(entry.id, summary.id);
-          if (round?.capture?.views?.length) { previous = round; break; }
+          const available = round ? await availableRoundScreenshots(entry.id, round) : undefined;
+          if (available?.capture?.views?.length) { previous = available; break; }
         }
         if (previous?.capture?.views?.length && !aborted()) {
           progress({ phase: 'pages', message: '正在和上一轮的页面截图对比' });
@@ -94,8 +97,10 @@ export async function reviewContext(entry: ProjectEntry) {
   const catalog = ruleCatalog(ruleSet);
   const sentence = new Map(catalog.map((item) => [item.id, item.rule]));
   const pageRules = [
+    ...screenshotGuidance(),
     ...catalog.filter((item) => item.kind === 'page' && item.level !== 'off').map((item) => item.rule),
     ...ruleSet.guidance.filter((item) => item.level !== 'off').map((item) => item.text),
+    ...catalog.filter((item) => item.level === 'off').map((item) => `项目已关闭，不作为本轮问题报告：${item.rule}`),
   ];
   return { ruleText: (id: string) => sentence.get(id), pageRules };
 }
@@ -103,7 +108,7 @@ export async function reviewContext(entry: ProjectEntry) {
 /** Asks the configured vision model to review this round's screenshots and stores what it says. */
 export async function reviewRound(entry: ProjectEntry, round: Round, settings: AiSettings, options: { signal?: AbortSignal; progress?: (step: RoundProgress) => void } = {}) {
   const { ruleText, pageRules } = await reviewContext(entry);
-  const tasks = reviewTasks(round, ruleText, pageRules);
+  const tasks = reviewTasks(await availableRoundScreenshots(entry.id, round), ruleText, pageRules);
   if (!tasks.length) return { verified: 0, found: 0, calls: 0, errors: [] as string[] };
   const outcome = await reviewWithModel(settings, tasks, {
     ...(options.signal ? { signal: options.signal } : {}),

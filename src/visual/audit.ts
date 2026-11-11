@@ -6,6 +6,8 @@ import { toPosix } from '../inventory/read.js';
 import { listProductFiles } from '../check/scan.js';
 import type { Violation } from '../check/run.js';
 import type { Capture } from '../capture/pages.js';
+import { inspectQuality, qualityDescription } from './quality.js';
+import { englishVisualFinding } from './english.js';
 
 /**
  * Page-level visual checks across a width sweep, generalised from the SynNovator redesign rules
@@ -259,6 +261,8 @@ function describe(kind: VisualKind, issue: RawIssue, widths: number[]) {
   const label = issue.label;
   const quoted = issue.text ? `「${[...issue.text].slice(0, 14).join('')}${[...issue.text].length > 14 ? '…' : ''}」` : '';
   switch (kind) {
+    case 'card-density': case 'unnamed-control': case 'unlabelled-field': case 'heading-order': case 'transition-all': case 'layout-animation': case 'reduced-motion':
+      return qualityDescription({ ...issue, kind });
     case 'text-wrap': return {
       name: `${quoted}${label}在 ${when}折成了两行`, what: `窗口缩到 ${when}，这个${label}里的文字换行了。`,
       consequence: '按钮、标签这类文字一换行，按钮会变高、一排高矮不齐，读起来也别扭。',
@@ -524,6 +528,7 @@ export async function auditVisual(target: VisualTarget, outDir: string, options:
             if (await page.screenshot({ path: image, fullPage: true, clip: { x: 0, y: 0, width, height: Math.min(height, VIEW_MAX_HEIGHT) } }).then(() => true, () => false)) views.push({ route, width, image });
           }
           const issues = await inPage<RawIssue[]>(page, VISUAL_SCRIPT).catch(() => [] as RawIssue[]);
+          issues.push(...await inspectQuality(page, width === WIDTHS[0]));
           for (const issue of issues) await record(issue, issue.kind, width);
         }
         // Long-text stress: labels about 60% longer (translations, real user content), checked wide and narrow.
@@ -611,7 +616,7 @@ export async function auditVisual(target: VisualTarget, outDir: string, options:
     const source = single ? await sourceFor(target.productRoot, entry.issue.text, entry.modules, cache, entry.issue.classes, entry.issue.near) : undefined;
     const fingerprint = `${createHash('sha256').update(`${rule.id}\n${entry.route}\n${entry.issue.key}\n${entry.issue.text}`).digest('hex').slice(0, 16)}#1`;
     violations.push({
-      ...text, title: rule.title, rule: rule.id, level, origin: 'basic',
+      ...text, english: englishVisualFinding(entry.kind, entry.issue, entry.widths), title: rule.title, rule: rule.id, level, origin: 'basic',
       file: source?.file ?? `页面 ${entry.route}`, line: source?.line ?? 0, column: 1,
       snippet: entry.issue.text, detail: `${rule.id}：在 ${entry.widths.join('、')} 宽时出现；页面 ${entry.route}；${entry.issue.state ? `状态：${entry.issue.state}；` : ''}元素 ${entry.issue.key}${source ? '' : '；没在源码里唯一定位到这段文字'}`,
       status: 'new', fingerprint,

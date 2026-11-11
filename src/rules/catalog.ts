@@ -35,6 +35,13 @@ const HINT_SENTENCE: Record<string, string> = {
 };
 const PAGE: Record<string, [string, string]> = {
   'visual/no-wrap': ['按钮、标签、标签页的文字始终一行', '一换行按钮就变高，一排高矮不齐。'],
+  'visual/card-density': ['大量同权重卡片需要核对查找与比较效率', '结构建议，需结合任务验证，不是自动审美评分。'],
+  'visual/control-name': ['每个可见操作都有可访问名称', '窄屏隐藏文字后仍能辨认操作。'],
+  'visual/field-label': ['输入项具有关联标签或可访问名称', '占位文字不能代替字段标签。'],
+  'visual/heading-order': ['标题层级表达连续的内容关系', '便于按标题导航。'],
+  'visual/transition-properties': ['只对需要变化的属性设置过渡', '避免布局变动被意外动画化。'],
+  'visual/animation-layout': ['布局属性动画需有性能验证', '检查观察到的关键帧，不直接断言掉帧。'],
+  'visual/reduced-motion': ['减少动态效果模式下核对仍在播放的运动', '保留必要反馈并减少非必要位移。'],
   'visual/no-clip': ['文字不能被截掉', '用户看不全写的是什么。'],
   'visual/no-overlap': ['内容不能叠在一起', '互相遮挡，看不清也点不到。'],
   'visual/no-horizontal-scroll': ['页面不能左右滚动', '窄屏时内容被挤到屏幕外。'],
