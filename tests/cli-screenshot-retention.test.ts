@@ -42,6 +42,7 @@ it('cleans registered CLI screenshots without deleting modified, unregistered, o
 it('registers screenshots produced by the real run and components commands', async () => {
   const home = await mkdtemp(join(tmpdir(), 'uxqa-cli-integration-home-'));
   const workspace = await mkdtemp(join(tmpdir(), 'uxqa-cli-integration-'));
+  await mkdir(resolve('.ai-output'), { recursive: true });
   const build = await mkdtemp(join(resolve('.ai-output'), 'cli-retention-build-'));
   const defaultOutput = join(workspace, 'default-output');
   await mkdir(defaultOutput);
