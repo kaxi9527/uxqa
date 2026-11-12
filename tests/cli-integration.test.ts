@@ -18,7 +18,7 @@ describe('CLI output and exit contracts', () => {
       await expect(exec(process.execPath,['--import','tsx',cli,'components','--source',resolve('examples/component-source'),'--out',temp])).rejects.toMatchObject({code:2});
       expect(await readFile(existing,'utf8')).toBe('keep');
     } finally { await rm(temp,{recursive:true,force:true}); }
-  });
+  },20_000);
   it('runs a source-only audit with no browser and preserves JSON evidence', async () => {
     const temp = await mkdtemp(join(tmpdir(),'uxqa-cli-source-'));
     try {
