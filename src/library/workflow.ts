@@ -14,6 +14,7 @@ import { boundPath, fileHash, hash } from './paths.js';
 import { sourceSnapshot } from './snapshot.js';
 import { specification } from './specification.js';
 import { verifyImplementation } from './implementation.js';
+import { registerExportedScreenshots } from '../ui/exported-screenshot-retention.js';
 import { revisionBaseline, reviseCatalog } from './revision.js';
 import type { ComponentPlan } from './types.js';
 
@@ -54,7 +55,7 @@ export async function prepareComponentPlan(options: {source:string;definitionPat
   return {plan,path};
 }
 
-async function validatePlan(path: string): Promise<ComponentPlan> {
+export async function validateComponentPlan(path: string): Promise<ComponentPlan> {
   const plan=JSON.parse(await readFile(path,'utf8')) as ComponentPlan;
   if (plan.schemaVersion!==1 || plan.status!=='ready-for-componentization' || !plan.library) throw new Error('Invalid componentization plan');
   const definition=await loadDefinition(plan.definitionPath);
@@ -70,7 +71,7 @@ async function validatePlan(path: string): Promise<ComponentPlan> {
 }
 
 export async function syncComponentPlan(planPath: string, outDir: string): Promise<{status:'synced';productId:string;catalog:string;specification:string;receipt:string}> {
-  const plan=await validatePlan(planPath);
+  const plan=await validateComponentPlan(planPath);
   const {output}=await validateSourcePaths(plan.productRoot,outDir);
   const root=plan.productRoot;
   for (const path of plan.definition.implementation) {
@@ -96,7 +97,7 @@ export async function syncComponentPlan(planPath: string, outDir: string): Promi
   let previousCatalog:string|undefined;
   let updatedCatalog:string|undefined;
   try {
-    await validatePlan(planPath);
+    await validateComponentPlan(planPath);
     const before=await sourceSnapshot(root);
     before['[qa-config]']=await fileHash(qaPath);
     if (before['[qa-config]']!==hash(qaSource)) throw new Error('QA configuration changed before verification');
@@ -116,12 +117,18 @@ export async function syncComponentPlan(planPath: string, outDir: string): Promi
     }
     const unchanged=async()=>JSON.stringify(before)===JSON.stringify({...await sourceSnapshot(root),'[qa-config]':await fileHash(qaPath),...(qa.storageState ? {'[auth-state]':await fileHash(qa.storageState)}:{})});
     if (!(await unchanged())) throw new Error('Product source changed during verification; no library sync performed');
-    const audit=await runAudit(qa,{outDir:join(output,'browser')});
+    const browserOutput=join(output,'browser');
+    let audit;
+    try { audit=await runAudit(qa,{outDir:browserOutput}); }
+    finally {
+      const images=await readdir(browserOutput).catch((error:NodeJS.ErrnoException)=>{if(error.code==='ENOENT')return [];throw error;});
+      await registerExportedScreenshots(browserOutput,images.filter((file)=>file.toLowerCase().endsWith('.png')).map((file)=>join(browserOutput,file)));
+    }
     await writeReports(audit,join(output,'browser'));
     if (summarizeRun(audit).status!=='passed' || !audit.artifacts.some((path)=>path.includes('-flow-') && path.endsWith('.png'))) throw new Error('Component browser verification failed or interaction screenshot evidence is missing');
     verification.checks.push({name:'browser',status:'passed',log:join(output,'browser/report.json')});
     if (!(await unchanged())) throw new Error('Product source changed during verification; no library sync performed');
-    await validatePlan(planPath);
+    await validateComponentPlan(planPath);
     const native=await readCatalog(plan.library.catalog);
     const specDirectory=join(plan.library.root,'specs');
     await mkdir(specDirectory,{recursive:true});

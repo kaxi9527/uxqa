@@ -261,6 +261,8 @@ const state = {
   withShot: false,
   focusField: null,
   selected: null,
+  agentDrafts: {},
+  agentFindings: {},
   view: 'crop',
   shown: PAGE_SIZE,
   error: '',
@@ -392,7 +394,7 @@ async function selectProject(id) {
 }
 
 // ---------- workspace ----------
-const TABS = [['checks', '检查', 'Check'], ['issues', '问题处理', 'Issues'], ['recheck', '复检', 'Recheck'], ['components', '组件库', 'Components'], ['rules', '项目规范', 'Project rules'], ['settings', '预览设置', 'Preview settings']];
+const TABS = [['checks', '检查', 'Check'], ['issues', '问题处理', 'Issues'], ['agent', '修复对话', 'Repair chat'], ['recheck', '复检', 'Recheck'], ['components', '组件库', 'Components'], ['rules', '项目规范', 'Project rules'], ['settings', '预览设置', 'Preview settings']];
 
 function rememberPlace() {
   const query = new URLSearchParams();
@@ -493,6 +495,7 @@ function renderWorkspace() {
   fill(workspace, topbar, body);
   if (state.tab === 'checks') renderCheckCenter(body);
   if (state.tab === 'issues') renderIssues(body);
+  if (state.tab === 'agent') renderProjectAgent(body);
   if (state.tab === 'recheck') renderRecheck(body);
   if (state.tab === 'components') renderComponents(body);
   if (state.tab === 'rules') renderRules(body);
@@ -853,7 +856,9 @@ function detailPane(violation, filtered, numbered) {
         h('h2', { text: violation.name }),
         h('div', { class: 'row' }, h('span', { class: `pill ${violation.level}`, text: LEVEL[violation.level] }), h('span', { class: 'chip', text: violation.title }),
           h('span', { class: 'where mono ellipsis', title: violation.file }, icon('file'), violation.line ? `${violation.file}:${violation.line}` : violation.file))),
-      h('button', { class: 'btn small', type: 'button', onclick: () => copy(single, accessText('这一条的修复提示', 'repair prompt')) }, icon('copy'), accessText('复制给 AI', 'Copy for AI'))),
+      h('div', { class: 'detail-actions' },
+        h('button', { class: 'btn small primary', type: 'button', onclick: () => openProjectAgent(violation) }, accessText('讨论并修复', 'Discuss and repair')),
+        h('button', { class: 'btn small', type: 'button', onclick: () => copy(single, accessText('这一条的修复提示', 'repair prompt')) }, icon('copy'), accessText('复制给 AI', 'Copy for AI')))),
     violation.origin === 'manual' ? h('div', { class: 'notice', text: accessText('这条问题来自项目级人工观察。请按记录的操作重现；尚未关联自动截图证据。', 'This is a manual project observation. Reproduce the recorded steps; no automatic screenshot evidence is attached.') }) : stage(number, capture),
     accessText(false, !violation.english && violation.origin !== 'manual') ? h('div', { class: 'notice', text: 'This saved finding is shown in its original language. Run a new check for the latest available English descriptions.' }) : null,
     issueWorkflowDetails(violation),

@@ -1,3 +1,23 @@
+## UXQA 0.5.2 — development version, not released
+
+Project repair chat now uses the selected finding, screenshot, project rules,
+component catalog and source recheck feedback. It can propose design candidates,
+open temporary browser style alternatives and sample interaction animation timing.
+It can prepare component plans and, after the user reviews and starts the project
+scripts and browser scenario, synchronize the native catalog and specification
+when verification passes. Verification screenshots follow 48-hour retention.
+Design candidates can cite excerpts read in the current turn and suggest semantic
+tokens. Browser alternatives support multiple existing elements in isolated
+contexts; motion samples add scroll, reduced-motion emulation and available
+main-thread counters. See the product guide for coverage and limitations.
+Reviewed code alternatives can temporarily replace same-origin scripts or styles
+loaded by the page to compare structure and interactions without editing source.
+They run only after the user starts them in a trusted test environment.
+Candidates, source checks and browser observations have distinct evidence and
+coverage limits. Real accounts, devices, all page states and complete parity with
+the three reference projects remain unverified. This source update does not
+provide new downloadable installers.
+
 ## UXQA 0.5.0
 
 ### 中文

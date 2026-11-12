@@ -21,6 +21,7 @@ import { homedir } from 'node:os';
 import { chromium, type Browser, type BrowserContext } from 'playwright';
 import { AI_PRESETS, AiError, askVision, listModels, modelBase, publicAi, readAiSettings, writeAiSettings, type AiSettings, type AiProtocol } from '../ai/model.js';
 import { engineStatus, engineRequest, stopEngine, EngineRequestError } from '../ai/engine.js';
+import { cancelProjectAgent, closeProjectAgentPreview, getProjectAgent, ProjectAgentError, startAgentCodePreview, startAgentComponentSync, startProjectAgent, stopProjectAgents, undoProjectAgentEdit } from './project-agent.js';
 import { reviewContext, reviewRound, runRound } from './round-runner.js';
 import { reviewTasks } from '../ai/review.js';
 import { browserInfo, browserReady, installBrowser, installState, MISSING_SENTENCE, type BrowserKind } from '../browser/install.js';
@@ -438,6 +439,16 @@ async function route(request: IncomingMessage, response: ServerResponse, path: s
   const entry = await project(parts[1]);
   const action = parts[2];
 
+  if (action === 'agent') {
+    if (method === 'GET' && parts.length === 3) return send(response, 200, await getProjectAgent(entry.id));
+    if (method === 'POST' && parts[3] === 'messages' && parts.length === 4) { await startProjectAgent(entry, await accessBody(request)); return send(response, 202, { accepted: true }); }
+    if (method === 'POST' && parts[3] === 'cancel' && parts.length === 4) { cancelProjectAgent(entry.id); return send(response, 200, { cancelled: true }); }
+    if (method === 'POST' && parts[3] === 'undo' && parts.length === 4) { await undoProjectAgentEdit(entry, (await accessBody(request)).backupId); return send(response, 200, { undone: true }); }
+    if (method === 'POST' && parts[3] === 'close-preview' && parts.length === 4) { await closeProjectAgentPreview(entry.id); return send(response, 200, { closed: true }); }
+    if (method === 'POST' && parts[3] === 'code-preview' && parts.length === 4) { startAgentCodePreview(entry, (await accessBody(request)).planId); return send(response, 202, { started: true }); }
+    if (method === 'POST' && parts[3] === 'component-sync' && parts.length === 4) { startAgentComponentSync(entry, (await accessBody(request)).planId); return send(response, 202, { started: true }); }
+  }
+
   if (action === 'diagnosis' && parts[3] && parts[4] === 'verification' && parts.length === 5) {
     try {
       if (method === 'GET') return send(response, 200, await getDiagnosisVerification(entry.id, parts[3]));
@@ -705,7 +716,7 @@ export async function startConsole(options: { port?: number; host?: string } = {
       });
       response.end(asset.encoding === 'base64' ? Buffer.from(asset.body, 'base64') : asset.body);
     } catch (error) {
-      const status = error instanceof HttpError || error instanceof EngineRequestError ? error.status : 500;
+      const status = error instanceof HttpError || error instanceof EngineRequestError || error instanceof ProjectAgentError ? error.status : 500;
       const message = error instanceof Error ? error.message : String(error);
       const locale = await readAccessSettings().then((settings) => settings.locale).catch(() => null);
       send(response, status, { error: locale === 'en' ? englishUiError(message) : message });
@@ -724,6 +735,7 @@ export async function startConsole(options: { port?: number; host?: string } = {
       clearInterval(retentionTimer);
       await retentionRun;
       for (const job of jobs.values()) job.controller.abort();
+      await stopProjectAgents();
       await Promise.all([...logins.keys()].map(closeLogin));
       await stopEngine();
       await new Promise<void>((done) => server.close(() => done()));
