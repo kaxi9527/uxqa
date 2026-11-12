@@ -1,4 +1,4 @@
-## UXQA 0.5.2 — development version, not released
+## UXQA 0.5.2
 
 Project repair chat now uses the selected finding, screenshot, project rules,
 component catalog and source recheck feedback. It can propose design candidates,
@@ -15,8 +15,14 @@ loaded by the page to compare structure and interactions without editing source.
 They run only after the user starts them in a trusted test environment.
 Candidates, source checks and browser observations have distinct evidence and
 coverage limits. Real accounts, devices, all page states and complete parity with
-the three reference projects remain unverified. This source update does not
-provide new downloadable installers.
+the three reference projects remain unverified. Download the archive for your
+operating system and processor, and verify it using `SHA256SUMS.txt`.
+
+### 中文
+
+项目修复对话结合本轮问题、截图、项目规则和组件目录，支持查看并修改项目文本、生成设计候选、比较临时方案及采样动效。组件同步与可执行代码方案需要用户核对后启动；可执行预览应使用可信测试环境。截图按既有 48 小时规则清理。各项建议、源码检查和页面实测的证据范围不同，真实账号、实际设备及所有页面状态仍需分别验证。
+
+从 Assets 下载对应系统和芯片的安装包及 `SHA256SUMS.txt`；详细步骤见 [中文安装说明](https://github.com/kaxi9527/uxqa/blob/main/docs/install-and-use.md) 和 [English installation guide](https://github.com/kaxi9527/uxqa/blob/main/docs/install-and-use.en.md)。macOS 未公证，Windows 未使用受信任的发布者证书签名；按系统提示核对来源后打开。
 
 ## UXQA 0.5.0
 

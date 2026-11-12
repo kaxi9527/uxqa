@@ -14,7 +14,7 @@ Open a finding to review its location, evidence, and repair direction. Record a 
 
 A focused repair plan combines the selected round's facts, project rules, and built-in knowledge into verification tasks. Record each task's result and evidence, inspect its history, or transfer a finding to a manual observation. A recorded pass is supplied by its author; it does not mean UXQA automatically executed the task. See [quality workflow](quality-workflow.md) for source details.
 
-## Project repair chat (0.5.2 development version; not yet released)
+## Project repair chat (0.5.2 and later)
 
 Open **Repair chat** within a project, or choose **Discuss and repair** on a finding; both open the same project conversation. Select and save a model in Settings first. Sending shares up to 30 findings from the selected check, the conversation and any project files actually read with that model provider. A finding screenshot or page overview is attached by default when available; you can deselect it. If none is available, UXQA explains how to run a page check.
 

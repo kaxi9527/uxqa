@@ -30,7 +30,7 @@ It runs Chromium through Playwright, checks page health and failed requests, eva
 
 Download a versioned archive from [Releases](https://github.com/kaxi9527/uxqa/releases).
 Node and the UXQA model module are included; no separate Node installation is needed.
-The 0.5.0 interface offers Chinese and English; earlier releases may differ.
+The interface offers Chinese and English. The project repair conversation is available in 0.5.2 and later; earlier releases may differ.
 
 | Computer | Download from Releases | Start |
 | --- | --- | --- |
@@ -60,8 +60,8 @@ OS version or subscription login working.
    Google subscription login additionally needs your own authorized OAuth client
    configuration ([details](docs/product-guide.md)); direct Gemini API does not.
 
-Projects and credentials stay in your local data root. AI review sends selected
-screenshots and review context to the provider you choose. Read the full
+Project data and credentials are stored locally. AI review and project repair send
+relevant screenshots, conversation and read source or preview excerpts to the provider you choose. Read the full
 [local data, network, permissions, backup and uninstall guide](docs/local-data-and-permissions.md)
 and [build instructions](docs/building-releases.md).
 
@@ -141,7 +141,7 @@ Known limits: rendered-page/source matching is heuristic, and similar-structure 
 
 ## Local Console (`uxqa ui`)
 
-The 0.5.0 source iteration organizes work as **项目 → 检查 → 问题处理 → 复检**.
+UXQA organizes work as **项目 → 检查 → 问题处理 → 复检**.
 Native quality knowledge drives UI / UX / experience classification, screenshot
 diagnosis, repair instructions and verification. Seven additional browser rules
 inspect structure, accessible names, field labels and motion behavior. No external
