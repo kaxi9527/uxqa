@@ -19,6 +19,10 @@ const fixture = createServer(async (req, res) => {
   const chunks = [];
   for await (const chunk of req) chunks.push(chunk);
   const body = JSON.parse(Buffer.concat(chunks).toString() || '{}');
+  const requestText = JSON.stringify(body);
+  const fixtureAnswer = requestText.includes('FIXTURE_EDIT_TOKEN')
+    ? JSON.stringify(requestText.includes('Updated src/Page.tsx') ? { type: 'answer', text: '已更新，请复检' } : requestText.includes('export const Page') ? { type: 'replace', path: 'src/Page.tsx', search: '>Test<', replace: '>Fixed<', reason: '修复示例页面按钮文案' } : { type: 'read', path: 'src/Page.tsx' })
+    : requestText.includes('你是 UXQA 项目专属 UI/UX') ? JSON.stringify({ type: 'answer', text: '项目对话连接正常' }) : '绿色';
   requests.push({ path: req.url, image: JSON.stringify(body).includes('image') || JSON.stringify(body).includes('inlineData'), stream: body.stream ?? false });
   if (body.stream || req.url.includes(':streamGenerateContent')) {
     res.setHeader('content-type', 'text/event-stream');
@@ -37,14 +41,14 @@ const fixture = createServer(async (req, res) => {
     } else if (req.url.includes(':streamGenerateContent')) {
       event('', { candidates: [{ content: { role: 'model', parts: [{ text: '绿色' }] }, finishReason: 'STOP' }], usageMetadata: { promptTokenCount: 1, candidatesTokenCount: 1 } });
     } else {
-      event('', { id: 'fixture', choices: [{ index: 0, delta: { role: 'assistant', content: '绿色' }, finish_reason: null }] });
+      event('', { id: 'fixture', choices: [{ index: 0, delta: { role: 'assistant', content: fixtureAnswer }, finish_reason: null }] });
       event('', { id: 'fixture', choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] });
       res.write('data: [DONE]\n\n');
     }
     res.end(); return;
   }
   res.setHeader('content-type', 'application/json');
-  res.end(JSON.stringify(req.method === 'GET' ? { data: [{ id: 'vision-fixture' }] } : req.url.endsWith('/responses') ? { output: [{ type: 'message', role: 'assistant', content: [{ type: 'output_text', text: '绿色' }] }] } : req.url.endsWith('/messages') ? { id: 'fixture-message', type: 'message', role: 'assistant', content: [{ type: 'text', text: '绿色' }], stop_reason: 'end_turn', usage: { input_tokens: 1, output_tokens: 1 } } : req.url.includes(':generateContent') ? { candidates: [{ content: { role: 'model', parts: [{ text: '绿色' }] }, finishReason: 'STOP' }] } : { id: 'fixture-response', object: 'chat.completion', model: 'vision-fixture', choices: [{ index: 0, message: { role: 'assistant', content: '绿色' }, finish_reason: 'stop' }], usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 } }));
+  res.end(JSON.stringify(req.method === 'GET' ? { data: [{ id: 'vision-fixture' }] } : req.url.endsWith('/responses') ? { output: [{ type: 'message', role: 'assistant', content: [{ type: 'output_text', text: '绿色' }] }] } : req.url.endsWith('/messages') ? { id: 'fixture-message', type: 'message', role: 'assistant', content: [{ type: 'text', text: '绿色' }], stop_reason: 'end_turn', usage: { input_tokens: 1, output_tokens: 1 } } : req.url.includes(':generateContent') ? { candidates: [{ content: { role: 'model', parts: [{ text: '绿色' }] }, finishReason: 'STOP' }] } : { id: 'fixture-response', object: 'chat.completion', model: 'vision-fixture', choices: [{ index: 0, message: { role: 'assistant', content: fixtureAnswer }, finish_reason: 'stop' }], usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 } }));
 });
 const assert = (ok, message) => { if (!ok) throw new Error(message); };
 try {
@@ -123,9 +127,29 @@ try {
   await page.getByRole('combobox', { name: '可用模型', exact: true }).selectOption(modelID);
   await page.getByRole('button', { name: '测试看图连接', exact: true }).click();
   await page.getByText('连接成功，模型看图回答：绿色', { exact: true }).waitFor();
-  await page.getByRole('button', { name: '保存并用于复核', exact: true }).click();
+  const [nativeSave] = await Promise.all([
+    page.waitForResponse((response) => new URL(response.url()).pathname === '/api/ai' && response.request().method() === 'POST'),
+    page.getByRole('button', { name: '保存并用于复核', exact: true }).click(),
+  ]);
+  assert(nativeSave.ok(), 'Native model settings request must succeed');
   await page.getByText('已保存。下一轮检测完会自动让 AI 看截图；已有的检测也可以在问题列表上方点"AI 看图复核"。', { exact: true }).waitFor();
   assert((await api('/ai')).settings.connection === 'native', 'Native model selection must persist');
+  const projectRoot = join(home, 'agent-project');
+  await mkdir(join(projectRoot, 'src'), { recursive: true });
+  await writeFile(join(projectRoot, 'package.json'), JSON.stringify({ name: 'desktop-agent-fixture' }));
+  await writeFile(join(projectRoot, 'src', 'Page.tsx'), 'export const Page = () => <button>Test</button>;');
+  const agentProject = (await api('/projects', { path: projectRoot })).project;
+  await api(`/projects/${agentProject.id}/agent/messages`, { text: '检查这个页面' });
+  let agent = await api(`/projects/${agentProject.id}/agent`);
+  for (let attempt = 0; agent.running && attempt < 120; attempt++) { await new Promise((done) => setTimeout(done, 100)); agent = await api(`/projects/${agentProject.id}/agent`); }
+  assert(!agent.running && agent.messages.some((item) => item.role === 'assistant' && item.text === '项目对话连接正常'), 'Bundled project agent must reach the native model module');
+  await api(`/projects/${agentProject.id}/agent/messages`, { text: 'FIXTURE_EDIT_TOKEN' });
+  agent = await api(`/projects/${agentProject.id}/agent`);
+  for (let attempt = 0; agent.running && attempt < 120; attempt++) { await new Promise((done) => setTimeout(done, 100)); agent = await api(`/projects/${agentProject.id}/agent`); }
+  const edit = agent.messages.find((item) => item.backupId);
+  assert(!agent.running && edit && (await readFile(join(projectRoot, 'src', 'Page.tsx'), 'utf8')).includes('>Fixed<'), 'Bundled project agent must edit project files without per-path setup');
+  await api(`/projects/${agentProject.id}/agent/undo`, { backupId: edit.backupId });
+  assert((await readFile(join(projectRoot, 'src', 'Page.tsx'), 'utf8')).includes('>Test<'), 'Bundled project agent edit must be undoable');
   await page.getByRole('button', { name: '登录订阅账号', exact: true }).click();
   const link = page.getByRole('link', { name: '在浏览器继续授权', exact: true });
   await link.waitFor();
@@ -189,7 +213,7 @@ try {
   await redact(join(evidence, 'uxqa'));
   assert(qaCode === 0, 'UXQA browser audit has findings; inspect its report');
   await writeFile(join(evidence, 'smoke.json'), JSON.stringify({ ok: true, protocol: 'responses', sourceIntegratedRouting: true, nativeAccountUI: true, loginCancel: true, externalAccountDiscovery: false, browserErrors: errors, fixtureRequests: requests, realProviders: 'not verified; requires user authorization' }, null, 2));
-  console.log('PASS: UXQA bundle, direct Responses, migrated protocol routing, native provider/login UI, credential isolation, window width');
+  console.log('PASS: UXQA bundle, project agent, direct Responses, native provider/login UI, credential isolation, window width');
 } catch (error) {
   await writeFile(join(evidence, 'failure.json'), JSON.stringify({ message: error.message, fixtureRequests: requests }, null, 2));
   if (page) { await page.screenshot({ path: join(evidence, 'failure.png'), fullPage: true }).catch(() => {}); }

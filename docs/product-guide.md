@@ -70,7 +70,7 @@ and does not switch or borrow another application's saved credential directory.
 - Version 0.5.0 offers Chinese and English in the console; project content, historical findings and provider messages retain their original language.
 - Page-to-source matching uses evidence and heuristics; ties or inaccessible states
   remain unresolved rather than receiving fabricated source locations.
-- No automatic product-code repair or background remote synchronization.
+- Ordinary checks do not repair product code; the 0.5.2 development repair agent can edit text source and create files within the selected project without per-path setup. No background remote synchronization.
 - No background update service. Install versioned releases manually.
 - macOS has a native window. Portable Windows/Linux packages serve the same UI on
   localhost and open it in a browser. No separate model-manager product is needed.
