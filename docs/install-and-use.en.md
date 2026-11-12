@@ -1,6 +1,6 @@
 # Install, use, and update UXQA
 
-UXQA is distributed directly through GitHub Releases; no app store or UXQA account is required. The bundles include their own runtime and model module. Download the archive for your operating system and processor, and keep all extracted files together. This guide describes v0.5.0; earlier downloads may have different features.
+UXQA is distributed directly through GitHub Releases; no app store or UXQA account is required. The bundles include their own runtime and model module. Download the archive for your operating system and processor, and keep all extracted files together. This guide describes v0.5.2; earlier downloads may have different features. Check Releases for the versions actually available.
 
 ## Download and verify
 
@@ -10,14 +10,14 @@ Download `SHA256SUMS.txt` from the same release. In the download folder, compute
 
 ```sh
 # macOS
-shasum -a 256 UXQA-0.5.0-macOS-arm64.zip
+shasum -a 256 UXQA-0.5.2-macOS-arm64.zip
 # Linux
-sha256sum uxqa-0.5.0-linux-x64.tar.gz
+sha256sum uxqa-0.5.2-linux-x64.tar.gz
 ```
 
 ```powershell
 # Windows PowerShell
-Get-FileHash .\uxqa-0.5.0-win-x64.zip -Algorithm SHA256
+Get-FileHash .\uxqa-0.5.2-win-x64.zip -Algorithm SHA256
 ```
 
 Substitute the actual archive name where necessary.
@@ -34,17 +34,17 @@ The Windows and Linux packages open a local browser interface; macOS uses a nati
 
 Add an existing project folder, inspect its component library and project rules, then start a source check. To inspect rendered pages, start the project's preview server and configure its URL. The optional screenshot browser is downloaded only after confirmation; source checks do not require it. Review the findings and evidence, make changes in your project, and run the same checks again. An unvisited route or missing screenshot is not a passed page review.
 
-In 0.5.0, use **Project → Check → Issue handling → Recheck**. The embedded quality knowledge supports classification and repair plans. Individual verification records are supplied by their author and do not themselves constitute automatic test results. See [quality workflow](quality-workflow.md) for current source behavior.
+Use **Project → Check → Issue handling → Recheck**. In 0.5.2, a project-specific repair conversation can inspect and edit project text, using the findings and available screenshot as context. Review edits and recheck the page. Individual verification records are supplied by their author and do not themselves constitute automatic test results. See the [user guide](product-guide.en.md) and [quality workflow](quality-workflow.md) for coverage and limitations.
 
 AI review is optional. Configure an API provider or connect your own supported subscription account in model settings, fetch models, select a vision-capable model, test it, and save. Connecting successfully does not establish that every model or subscription feature is available. Claude subscriptions require the official Claude Code runtime; Google subscription authorization requires an appropriately configured OAuth client.
 
 ## Access, data, and recovery
 
-UXQA reads selected project folders. It writes to a project only for explicitly requested actions such as saving project rules, recording baselines, or component sync. On macOS, protected folders such as Desktop, Documents, and Downloads may produce a system prompt when accessed. The system normally remembers your choice, but permissions or folder availability can change. Review the application's access in **System Settings → Privacy & Security → Files and Folders** if access is denied. A successful folder check records accessibility at that time; it is not a permanent grant or proof that all other locations are accessible.
+UXQA reads selected project folders. It writes to a project for requested actions such as saving rules, recording baselines, component sync, or edits made by the project repair agent. On macOS, protected folders such as Desktop, Documents, and Downloads may produce a system prompt when accessed. The system normally remembers your choice, but permissions or folder availability can change. Review the application's access in **System Settings → Privacy & Security → Files and Folders** if access is denied. A successful folder check records accessibility at that time; it is not a permanent grant or proof that all other locations are accessible.
 
 The optional LAN preview can require local-network access. UXQA does not need camera, microphone, accessibility, full-disk access, or system screen-recording permission for normal checks. Browser screenshots capture the configured web page, not the computer's screen. Review [local data and permissions](local-data-and-permissions.md) for exceptions, network details, and platform-specific behavior.
 
-Data is stored under `~/.uxqa` on macOS/Linux or `%USERPROFILE%\.uxqa` on Windows, unless `UXQA_HOME` is set. Credentials are local files, not a promise of keychain-backed encryption. Optional AI review sends selected screenshots and context to the chosen provider. Never include credentials, private project data, or sensitive screenshots in a public issue.
+Data is stored under `~/.uxqa` on macOS/Linux or `%USERPROFILE%\.uxqa` on Windows, unless `UXQA_HOME` is set. Credentials are local files, not a promise of keychain-backed encryption. AI review and project repair send the applicable screenshots, conversation and read project or preview-resource excerpts to the chosen model provider. Never include credentials, private project data, or sensitive screenshots in a public issue.
 
 From 0.5.0, app screenshots and registered CLI screenshots expire after 48 hours. Cleanup runs while UXQA is open and catches up on the next launch or CLI check. Findings, non-image reports and manually saved copies remain. Old custom output directories cannot be discovered automatically; retained browser trace archives may contain screenshots.
 
