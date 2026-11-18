@@ -55,6 +55,43 @@ export interface FlowConfig {
   steps: Step[];
 }
 
+export interface JourneyList {
+  container: string;
+  rows: string;
+  fields: Record<string, string>;
+  totalAttribute: string;
+  saveAs?: string;
+  equals?: string;
+  where?: Record<string, string>;
+}
+
+export interface BusinessJourney {
+  name: string;
+  requirement: string;
+  phases: Array<{ name: string; actor: string; route: string; steps: Step[]; list?: JourneyList; observe?: JourneyObservation[]; assert?: JourneyAssertion[] }>;
+  gaps: string[];
+}
+
+export interface JourneyObservation {
+  id: string;
+  target: Target;
+  read: 'text' | 'value' | 'attribute';
+  attribute?: string;
+  as?: 'number';
+}
+
+export interface JourneyPredicate {
+  left: string;
+  op: 'eq' | 'ne' | 'gt' | 'gte' | 'lt' | 'lte';
+  right: { ref: string } | { value: string | number };
+}
+
+export interface JourneyAssertion extends JourneyPredicate {
+  name: string;
+  when?: JourneyPredicate;
+  sameFact?: { object: [string, string]; field: [string, string]; version: [string, string] };
+}
+
 export type DataNature = 'real' | 'mock' | 'fixture' | 'mixed' | 'unknown';
 
 export interface EvidenceConfig {
@@ -75,6 +112,8 @@ export interface HarnessConfig {
   routes: string[];
   viewports: ViewportConfig[];
   flows: FlowConfig[];
+  journeys?: BusinessJourney[];
+  actorStates?: Record<string, string>;
   evidence: EvidenceConfig;
   notApplicable: NotApplicableEntry[];
   options: {

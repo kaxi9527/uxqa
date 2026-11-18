@@ -21,7 +21,7 @@ import { homedir } from 'node:os';
 import { chromium, type Browser, type BrowserContext } from 'playwright';
 import { AI_PRESETS, AiError, askVision, listModels, modelBase, publicAi, readAiSettings, writeAiSettings, type AiSettings, type AiProtocol } from '../ai/model.js';
 import { engineStatus, engineRequest, stopEngine, EngineRequestError } from '../ai/engine.js';
-import { cancelProjectAgent, closeProjectAgentPreview, getProjectAgent, ProjectAgentError, startAgentCodePreview, startAgentComponentSync, startProjectAgent, stopProjectAgents, undoProjectAgentEdit } from './project-agent.js';
+import { cancelProjectAgent, closeProjectAgentPreview, getProjectAgent, ProjectAgentError, startAgentCodePreview, startAgentComponentSync, startProjectAgent, startReviewedJourney, stopProjectAgents, undoProjectAgentEdit } from './project-agent.js';
 import { reviewContext, reviewRound, runRound } from './round-runner.js';
 import { reviewTasks } from '../ai/review.js';
 import { browserInfo, browserReady, installBrowser, installState, MISSING_SENTENCE, type BrowserKind } from '../browser/install.js';
@@ -442,6 +442,7 @@ async function route(request: IncomingMessage, response: ServerResponse, path: s
   if (action === 'agent') {
     if (method === 'GET' && parts.length === 3) return send(response, 200, await getProjectAgent(entry.id));
     if (method === 'POST' && parts[3] === 'messages' && parts.length === 4) { await startProjectAgent(entry, await accessBody(request)); return send(response, 202, { accepted: true }); }
+    if (method === 'POST' && parts[3] === 'journey' && parts.length === 4) { startReviewedJourney(entry, (await accessBody(request)).planId); return send(response, 202, { started: true }); }
     if (method === 'POST' && parts[3] === 'cancel' && parts.length === 4) { cancelProjectAgent(entry.id); return send(response, 200, { cancelled: true }); }
     if (method === 'POST' && parts[3] === 'undo' && parts.length === 4) { await undoProjectAgentEdit(entry, (await accessBody(request)).backupId); return send(response, 200, { undone: true }); }
     if (method === 'POST' && parts[3] === 'close-preview' && parts.length === 4) { await closeProjectAgentPreview(entry.id); return send(response, 200, { closed: true }); }

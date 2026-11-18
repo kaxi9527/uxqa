@@ -1,4 +1,4 @@
-import type { DataNature, FlowConfig, HarnessConfig, NetworkRule, NotApplicableEntry, Step, Target, ViewportConfig } from './types.js';
+import type { BusinessJourney, DataNature, FlowConfig, HarnessConfig, JourneyAssertion, JourneyList, JourneyObservation, JourneyPredicate, NetworkRule, NotApplicableEntry, Step, Target, ViewportConfig } from './types.js';
 
 const DEFAULT_VIEWPORTS: ViewportConfig[] = [
   { name: 'desktop', width: 1440, height: 900 },
@@ -175,6 +175,100 @@ function parseFlow(value: unknown): FlowConfig {
   };
 }
 
+function stringMap(value: unknown, label: string): Record<string, string> {
+  return Object.fromEntries(Object.entries(record(value, label)).map(([key, entry]) => [key, stringValue(entry, label)]));
+}
+
+function parseObservation(value: unknown, known: Set<string>): JourneyObservation {
+  const item = record(value, 'observation');
+  const id = stringValue(item.id, 'observation.id');
+  if (known.has(id)) throw new Error('Observation IDs must be unique within the scenario: ' + id);
+  const read = item.read;
+  if (read !== 'text' && read !== 'value' && read !== 'attribute') throw new Error('observation.read must be text, value or attribute');
+  if (item.as !== undefined && item.as !== 'number') throw new Error('Only as: number is supported');
+  if (read !== 'attribute' && item.attribute !== undefined) throw new Error('An attribute name needs read: attribute');
+  known.add(id);
+  return { id, target: parseTarget(item.target), read, ...(read === 'attribute' ? { attribute: stringValue(item.attribute, 'observation.attribute') } : {}), ...(item.as ? { as: 'number' } : {}) };
+}
+
+function parsePredicate(item: Record<string, unknown>, known: Set<string>): JourneyPredicate {
+  const left = stringValue(item.left, 'predicate.left');
+  const op = item.op;
+  if (op !== 'eq' && op !== 'ne' && op !== 'gt' && op !== 'gte' && op !== 'lt' && op !== 'lte') throw new Error('Unsupported comparison operator');
+  const right = record(item.right, 'predicate.right');
+  if (Object.keys(right).length !== 1) throw new Error('Choose one right operand: ref or value');
+  if (!known.has(left)) throw new Error('Unknown observation: ' + left);
+  if (typeof right.ref === 'string') {
+    if (!known.has(right.ref)) throw new Error('Unknown observation: ' + right.ref);
+    return { left, op, right: { ref: right.ref } };
+  }
+  if (typeof right.value === 'string' || (typeof right.value === 'number' && Number.isFinite(right.value))) return { left, op, right: { value: right.value } };
+  throw new Error('The right operand needs a known observation or a text/number literal');
+}
+
+function parseSameFact(value: unknown, known: Set<string>): NonNullable<JourneyAssertion['sameFact']> {
+  const scope = record(value, 'sameFact');
+  function pair(key: string): [string, string] {
+    const ids = scope[key];
+    if (!Array.isArray(ids) || ids.length !== 2 || ids[0] === ids[1] || !ids.every(id => known.has(id))) throw new Error('sameFact.' + key + ' needs two distinct observed references');
+    return [ids[0], ids[1]];
+  }
+  const fields = { object: pair('object'), field: pair('field'), version: pair('version') };
+  if (new Set(Object.values(fields).flat()).size !== 6) throw new Error('Object, field and version need their own observations');
+  return fields;
+}
+
+export function parseJourney(value: unknown): BusinessJourney {
+  const plan = record(value, 'journey');
+  const snapshots = new Map<string, string[]>();
+  const known = new Set<string>();
+  if (!Array.isArray(plan.phases) || !plan.phases.length) throw new Error('journey.phases must be a non-empty array');
+  const phases = plan.phases.map((raw) => {
+    const phase = record(raw, 'phase');
+    const route = stringValue(phase.route, 'phase.route');
+    if (!route.startsWith('/') || route.startsWith('//') || route.includes('\\') || /[\x00-\x1f]/.test(route) || new URL(route, 'https://project.invalid').origin !== 'https://project.invalid') throw new Error('phase.route must be a project-relative URL starting with /');
+    const steps = phase.steps ?? [];
+    if (!Array.isArray(steps)) throw new Error('phase.steps must be an array');
+    let list: JourneyList | undefined;
+    if (phase.list !== undefined) {
+      const input = record(phase.list, 'phase.list');
+      const fields = stringMap(input.fields, 'list.fields');
+      const keys = Object.keys(fields).sort();
+      if (!keys.length) throw new Error('list.fields must map stable keys to row attributes');
+      list = { container: stringValue(input.container, 'list.container'), rows: stringValue(input.rows, 'list.rows'), fields, totalAttribute: stringValue(input.totalAttribute, 'list.totalAttribute') };
+      if (input.equals !== undefined) {
+        list.equals = stringValue(input.equals, 'list.equals');
+        if (JSON.stringify(snapshots.get(list.equals)) !== JSON.stringify(keys)) throw new Error('list.equals needs an earlier snapshot with matching field names');
+        if (input.where !== undefined) {
+          list.where = stringMap(input.where, 'list.where');
+          if (!Object.keys(list.where).every(key => keys.includes(key))) throw new Error('list.where must use snapshot fields');
+        }
+      } else if (input.where !== undefined) throw new Error('list.where needs list.equals');
+      if (input.saveAs !== undefined) {
+        list.saveAs = stringValue(input.saveAs, 'list.saveAs');
+        if (snapshots.has(list.saveAs)) throw new Error('Snapshot names must be unique within a journey');
+        snapshots.set(list.saveAs, keys);
+      }
+      if (!list.saveAs && !list.equals) throw new Error('A list needs saveAs or equals');
+    }
+    if (phase.observe !== undefined && !Array.isArray(phase.observe)) throw new Error('phase.observe must be an array');
+    if (phase.assert !== undefined && !Array.isArray(phase.assert)) throw new Error('phase.assert must be an array');
+    const observe = phase.observe?.map(item => parseObservation(item, known));
+    const assertions = phase.assert?.map(raw => {
+      const item = record(raw, 'assertion');
+      const predicate = parsePredicate(item, known);
+      const sameFact = item.sameFact !== undefined ? parseSameFact(item.sameFact, known) : undefined;
+      if (sameFact && (predicate.op !== 'eq' || !('ref' in predicate.right) || predicate.left === predicate.right.ref || Object.values(sameFact).flat().some(id => id === predicate.left || ('ref' in predicate.right && id === predicate.right.ref)))) throw new Error('Same-fact checks compare two independent observed values for equality');
+      return { name: stringValue(item.name, 'assertion.name'), ...predicate, ...(sameFact ? { sameFact } : {}), ...(item.when !== undefined ? { when: parsePredicate(record(item.when, 'assertion.when'), known) } : {}) };
+    });
+    if (!steps.length && !list && !observe?.length && !assertions?.length) throw new Error('A phase needs an operation, observation or assertion');
+    return { name: stringValue(phase.name, 'phase.name'), actor: stringValue(phase.actor, 'phase.actor'), route, steps: steps.map(parseStep), ...(list ? { list } : {}), ...(observe?.length ? { observe } : {}), ...(assertions?.length ? { assert: assertions } : {}) };
+  });
+  const gaps = stringArray(plan.gaps, [], 'journey.gaps');
+  if (!gaps.length && !phases.some(p => p.assert?.length || p.list?.equals || p.steps.some(s => s.action.startsWith('expect')))) throw new Error('A scenario needs an assertion or an explicit evidence gap');
+  return { name: stringValue(plan.name, 'journey.name'), requirement: stringValue(plan.requirement, 'journey.requirement'), phases, gaps };
+}
+
 function parseNotApplicable(value: unknown): NotApplicableEntry {
   const entry = record(value, 'notApplicable entry');
   const check = stringValue(entry.check, 'notApplicable.check');
@@ -231,6 +325,8 @@ export function loadConfig(input: unknown): HarnessConfig {
   const parsedViewports = viewports.map(parseViewport);
   if (new Set(parsedViewports.map((viewport) => viewport.name)).size !== parsedViewports.length) throw new Error('viewport names must be unique');
   const parsedFlows = flows.map(parseFlow);
+  const journeys = source.journeys ?? [];
+  if (!Array.isArray(journeys)) throw new Error('journeys must be an array');
   if (new Set(parsedFlows.map((flow) => flow.name)).size !== parsedFlows.length) throw new Error('flow names must be unique');
   for (const flow of parsedFlows) {
     if (flow.route && !routes.includes(flow.route)) throw new Error(`Flow route is not configured for coverage: ${flow.route}`);
@@ -242,6 +338,8 @@ export function loadConfig(input: unknown): HarnessConfig {
     routes,
     viewports: parsedViewports,
     flows: parsedFlows,
+    ...(journeys.length ? { journeys: journeys.map(parseJourney) } : {}),
+    ...(source.actorStates === undefined ? {} : { actorStates: stringMap(source.actorStates, 'actorStates') }),
     evidence: {
       ...(rawEvidence.productRoot === undefined ? {} : { productRoot: stringValue(rawEvidence.productRoot, 'evidence.productRoot') }),
       ...(rawEvidence.environment === undefined ? {} : { environment: stringValue(rawEvidence.environment, 'evidence.environment') }),

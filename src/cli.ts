@@ -66,6 +66,7 @@ async function main(): Promise<void> {
     config = loadConfig(raw);
     const configDir = args.config ? dirname(resolve(args.config)) : process.cwd();
     if (config.storageState && !isAbsolute(config.storageState)) config.storageState = resolve(configDir,config.storageState);
+    if (config.actorStates) config.actorStates = Object.fromEntries(Object.entries(config.actorStates).map(([actor, path]) => [actor, resolve(configDir, path)]));
     if (config.evidence.productRoot && !isAbsolute(config.evidence.productRoot)) config.evidence.productRoot = resolve(configDir,config.evidence.productRoot);
   }
   if (args.source) await validateSourcePaths(args.source,outDir);

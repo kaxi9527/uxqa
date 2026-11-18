@@ -1,0 +1,67 @@
+{
+  "name": "Configuration and task delivery",
+  "baseUrl": "http://127.0.0.1:4189",
+  "evidence": { "environment": "local disposable service", "dataNature": "fixture" },
+  "options": { "axe": false, "keyboard": false, "reflow": false, "reducedMotion": false, "screenshots": false, "trace": "off" },
+  "journeys": [
+    {
+      "name": "Published deadline",
+      "requirement": "New registrations use the published deadline for their event. Only timely completion grants eligibility.",
+      "phases": [
+        { "name": "Identify organizer", "actor": "owner", "route": "/session/owner", "steps": [{"action":"expectText","target":{"css":"output"},"text":"owner","exact":true}] },
+        { "name": "Publish only the target deadline", "actor": "owner", "route": "/settings", "steps": [
+          {"action":"expectValue","target":{"label":"Hours"},"value":"24"},
+          {"action":"fill","target":{"label":"Hours"},"value":"48"},
+          {"action":"click","target":{"role":"button","name":"Publish"}},
+          {"action":"expectText","target":{"css":"output"},"text":"Published 48","exact":true}
+        ] },
+        { "name": "Read back the published value", "actor": "owner", "route": "/settings", "steps": [{"action":"expectValue","target":{"label":"Hours"},"value":"48"}] },
+        { "name": "Identify target entrant", "actor": "target", "route": "/session/target", "steps": [{"action":"expectText","target":{"css":"output"},"text":"target","exact":true}] },
+        { "name": "Register in the changed event", "actor": "target", "route": "/event", "steps": [
+          {"action":"expectText","target":{"css":"output"},"text":"48 hours","exact":true},
+          {"action":"click","target":{"role":"button","name":"Register"}},
+          {"action":"expectText","target":{"css":"output"},"text":"Registered · 48 hours","exact":true}
+        ] },
+        { "name": "Identify control entrant", "actor": "control", "route": "/session/control", "steps": [{"action":"expectText","target":{"css":"output"},"text":"control","exact":true}] },
+        { "name": "Register in the unchanged event", "actor": "control", "route": "/event", "steps": [
+          {"action":"expectText","target":{"css":"output"},"text":"24 hours","exact":true},
+          {"action":"click","target":{"role":"button","name":"Register"}},
+          {"action":"expectText","target":{"css":"output"},"text":"Registered · 24 hours","exact":true}
+        ] },
+        { "name": "Advance and read the service clock", "actor": "owner", "route": "/clock", "steps": [
+          {"action":"click","target":{"role":"button","name":"Advance 25h"}},
+          {"action":"expectText","target":{"css":"output"},"text":"25","exact":true}
+        ] },
+        { "name": "Complete at hour 25", "actor": "target", "route": "/complete", "steps": [
+          {"action":"click","target":{"role":"button","name":"Save details"}},
+          {"action":"expectText","target":{"css":"output"},"text":"Saved","exact":true}
+        ] },
+        { "name": "Read target eligibility", "actor": "target", "route": "/eligibility", "steps": [{"action":"expectText","target":{"css":"output"},"text":"Eligible","exact":true}] },
+        { "name": "Read control eligibility", "actor": "control", "route": "/eligibility", "steps": [{"action":"expectText","target":{"css":"output"},"text":"Expired","exact":true}] }
+      ]
+    },
+    {
+      "name": "Task delivery",
+      "requirement": "Preview is provisional. Cancel preserves existing tasks. Confirm delivers the exact reviewed assignments.",
+      "phases": [
+        { "name": "Identify organizer", "actor": "owner", "route": "/session/owner", "steps": [{"action":"expectText","target":{"css":"output"},"text":"owner","exact":true}] },
+        { "name": "Identify reviewer A", "actor": "A", "route": "/session/A", "steps": [{"action":"expectText","target":{"css":"output"},"text":"A","exact":true}] },
+        { "name": "Identify reviewer B", "actor": "B", "route": "/session/B", "steps": [{"action":"expectText","target":{"css":"output"},"text":"B","exact":true}] },
+        { "name": "Capture original assignments", "actor": "owner", "route": "/tasks", "list": {"container":"#tasks","rows":"li","fields":{"stage":"data-stage","item":"data-item","reviewer":"data-actor"},"totalAttribute":"data-total","saveAs":"baseline"} },
+        { "name": "Prepare a preview", "actor": "owner", "route": "/allocate", "steps": [{"action":"click","target":{"role":"button","name":"Preview"}}], "list": {"container":"#tasks","rows":"li","fields":{"stage":"data-stage","item":"data-item","reviewer":"data-actor"},"totalAttribute":"data-total","saveAs":"provisional"} },
+        { "name": "Organizer before confirmation", "actor": "owner", "route": "/tasks", "list": {"container":"#tasks","rows":"li","fields":{"stage":"data-stage","item":"data-item","reviewer":"data-actor"},"totalAttribute":"data-total","equals":"baseline"} },
+        { "name": "A before confirmation", "actor": "A", "route": "/tasks", "list": {"container":"#tasks","rows":"li","fields":{"stage":"data-stage","item":"data-item","reviewer":"data-actor"},"totalAttribute":"data-total","equals":"baseline","where":{"reviewer":"A"}} },
+        { "name": "B before confirmation", "actor": "B", "route": "/tasks", "list": {"container":"#tasks","rows":"li","fields":{"stage":"data-stage","item":"data-item","reviewer":"data-actor"},"totalAttribute":"data-total","equals":"baseline","where":{"reviewer":"B"}} },
+        { "name": "Cancel the preview", "actor": "owner", "route": "/pending", "steps": [{"action":"click","target":{"role":"button","name":"Cancel"}},{"action":"expectText","target":{"css":"output"},"text":"Cancelled"}] },
+        { "name": "Organizer after cancellation", "actor": "owner", "route": "/tasks", "list": {"container":"#tasks","rows":"li","fields":{"stage":"data-stage","item":"data-item","reviewer":"data-actor"},"totalAttribute":"data-total","equals":"baseline"} },
+        { "name": "A after cancellation", "actor": "A", "route": "/tasks", "list": {"container":"#tasks","rows":"li","fields":{"stage":"data-stage","item":"data-item","reviewer":"data-actor"},"totalAttribute":"data-total","equals":"baseline","where":{"reviewer":"A"}} },
+        { "name": "B after cancellation", "actor": "B", "route": "/tasks", "list": {"container":"#tasks","rows":"li","fields":{"stage":"data-stage","item":"data-item","reviewer":"data-actor"},"totalAttribute":"data-total","equals":"baseline","where":{"reviewer":"B"}} },
+        { "name": "Capture this confirmation preview", "actor": "owner", "route": "/allocate", "steps": [{"action":"click","target":{"role":"button","name":"Preview"}}], "list": {"container":"#tasks","rows":"li","fields":{"stage":"data-stage","item":"data-item","reviewer":"data-actor"},"totalAttribute":"data-total","saveAs":"confirmedPreview"} },
+        { "name": "Confirm this preview", "actor": "owner", "route": "/pending", "steps": [{"action":"click","target":{"role":"button","name":"Confirm"}},{"action":"expectText","target":{"css":"output"},"text":"Confirmed"}] },
+        { "name": "Organizer after confirmation", "actor": "owner", "route": "/tasks", "list": {"container":"#tasks","rows":"li","fields":{"stage":"data-stage","item":"data-item","reviewer":"data-actor"},"totalAttribute":"data-total","equals":"confirmedPreview"} },
+        { "name": "A after confirmation", "actor": "A", "route": "/tasks", "list": {"container":"#tasks","rows":"li","fields":{"stage":"data-stage","item":"data-item","reviewer":"data-actor"},"totalAttribute":"data-total","equals":"confirmedPreview","where":{"reviewer":"A"}} },
+        { "name": "B after confirmation", "actor": "B", "route": "/tasks", "list": {"container":"#tasks","rows":"li","fields":{"stage":"data-stage","item":"data-item","reviewer":"data-actor"},"totalAttribute":"data-total","equals":"confirmedPreview","where":{"reviewer":"B"}} }
+      ]
+    }
+  ]
+}

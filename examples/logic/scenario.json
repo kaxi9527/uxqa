@@ -1,0 +1,27 @@
+{
+  "name": "State change and reversal",
+  "baseUrl": "http://127.0.0.1:4189",
+  "evidence": { "environment": "local example", "dataNature": "fixture" },
+  "journeys": [{
+    "name": "Compare observed values",
+    "requirement": "Increase raises the current value. Undo restores the value from before that operation.",
+    "phases": [
+      {
+        "name": "Read the starting value", "actor": "user", "route": "/",
+        "observe": [{"id":"before","target":{"label":"Current"},"read":"text","as":"number"}]
+      },
+      {
+        "name": "Change the value", "actor": "user", "route": "/",
+        "steps": [{"action":"click","target":{"role":"button","name":"Increase"}}],
+        "observe": [{"id":"after","target":{"label":"Current"},"read":"text","as":"number"}],
+        "assert": [{"name":"Value increased","left":"after","op":"gt","right":{"ref":"before"}}]
+      },
+      {
+        "name": "Reverse the operation", "actor": "user", "route": "/",
+        "steps": [{"action":"click","target":{"role":"button","name":"Undo"}}],
+        "observe": [{"id":"restored","target":{"label":"Current"},"read":"text","as":"number"}],
+        "assert": [{"name":"Undo restored the starting value","when":{"left":"after","op":"ne","right":{"ref":"before"}},"left":"restored","op":"eq","right":{"ref":"before"}}]
+      }
+    ]
+  }]
+}

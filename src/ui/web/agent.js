@@ -14,6 +14,22 @@ function openProjectAgent(finding) {
 function renderAgentEvidence(item, options = {}) {
   const data = item.data;
   if (!data) return null;
+  if (item.kind === 'journey-plan') {
+    const { plan } = data;
+    return h('div', { class: 'agent-evidence' },
+      h('strong', { text: plan.name }), h('p', { text: plan.requirement }),
+      h('p', { text: data.basis === 'same-fact' ? accessText('内置逻辑 · 比较同一对象、字段和版本的两次观测', 'Built-in comparison · same object, field and version') : `${data.path || accessText('本次要求', 'Current request')} · ${data.quote}` }),
+      h('details', {}, h('summary', { text: accessText('查看角色、操作与断言', 'Review actors, actions and assertions') }), h('pre', { text: JSON.stringify({ journeys: [plan] }, null, 2) })),
+      ...plan.gaps.map(text => h('p', { text: accessText('待验证 · ', 'Unverified · ') + text })),
+      h('p', { text: data.baseUrl ? accessText(`将在 ${data.baseUrl} 使用独立测试会话执行，操作可能修改测试数据。`, `Runs in separate test sessions at ${data.baseUrl}. Actions may change test data.`) : accessText('设置项目测试地址后重新生成场景。', 'Set a project test URL, then prepare the scenario again.') }),
+      h('button', { class: 'btn small', type: 'button', disabled: !data.baseUrl || options.disabled, onclick: () => options.runJourney(item.id) }, accessText('运行测试场景', 'Run test scenario')));
+  }
+  if (item.kind === 'journey-result') {
+    const label = s => ({ pass: accessText('通过', 'Passed'), fail: accessText('失败', 'Failed'), blocked: accessText('阻塞', 'Blocked'), 'not-verified': accessText('待验证', 'Unverified') })[s] || s;
+    return h('div', { class: 'agent-evidence' }, h('strong', { text: [data.name, label(data.status)].filter(Boolean).join(' · ') }),
+      ...(item.privateData?.phases || []).map(p => h('details', {}, h('summary', { text: `${label(p.status)} · ${p.actor} · ${p.phase}` }), h('pre', { text: p.detail }), p.observations ? h('pre', { text: JSON.stringify(p.observations, null, 2) }) : null, p.observed ? h('pre', { text: JSON.stringify(p.observed, null, 2) }) : null)),
+      item.privateData?.error ? h('p', { text: item.privateData.error }) : null);
+  }
   if (item.kind === 'design') {
     const labels = { background: accessText('背景', 'Background'), foreground: accessText('文字', 'Text'), primary: accessText('主色', 'Primary'), onPrimary: accessText('主色文字', 'On primary'), surface: accessText('表面', 'Surface'), onSurface: accessText('表面文字', 'On surface'), secondary: accessText('次要色', 'Secondary'), onSecondary: accessText('次要色文字', 'On secondary'), success: accessText('成功', 'Success'), onSuccess: accessText('成功文字', 'On success'), warning: accessText('警告', 'Warning'), onWarning: accessText('警告文字', 'On warning'), danger: accessText('危险', 'Danger'), onDanger: accessText('危险文字', 'On danger'), focus: accessText('焦点', 'Focus') };
     return h('div', { class: 'agent-evidence' },
@@ -121,7 +137,10 @@ function renderProjectAgent(body) {
             try { await api(`/projects/${id}/agent/undo`, { method: 'POST', body: { backupId: item.backupId } }); showError(''); await refresh(); }
             catch (failure) { showError(failure.message); }
           } }, item.undone ? accessText('已撤销', 'Undone') : item.created ? accessText('撤销创建', 'Undo creation') : accessText('撤销修改', 'Undo edit')) : null),
-        h('div', { class: 'agent-message-text', text: item.text }), renderAgentEvidence(item, { disabled: running || syncing || previewStarting, codeDisabled: running || syncing || previewStarting || data.previewActive, startCodePreview: async (planId) => {
+        h('div', { class: 'agent-message-text', text: item.text }), renderAgentEvidence(item, { disabled: running || syncing || previewStarting, codeDisabled: running || syncing || previewStarting || data.previewActive, runJourney: async (planId) => {
+          try { await api(`/projects/${id}/agent/journey`, { method: 'POST', body: { planId } }); running = true; await refresh(); }
+          catch (failure) { showError(failure.message); }
+        }, startCodePreview: async (planId) => {
           try { await api(`/projects/${id}/agent/code-preview`, { method: 'POST', body: { planId } }); previewStarting = true; await refresh(); }
           catch (failure) { showError(failure.message); }
         }, synced: syncedPlans.has(item.data?.planId), sync: async (planId) => {
@@ -129,7 +148,7 @@ function renderProjectAgent(body) {
           catch (failure) { showError(failure.message); }
         } }))) : h('div', { class: 'agent-empty' },
         h('strong', { text: accessText('从一个页面问题开始', 'Start with a page issue') }),
-        h('p', { class: 'muted', text: accessText('询问当前项目的检查结果、交互或修复。也可以从问题详情进入。', 'Ask about this project’s findings, interactions or fixes. You can also start from a finding.') })));
+        h('p', { class: 'muted', text: accessText('描述你期望的关系，例如「撤销后恢复原值」，或指定项目中的依据。助手可以核对操作前后和不同页面的实际结果。', 'Describe a relationship such as “undo restores the previous value”, or point to a project requirement. The assistant can compare observations across actions and views.') })));
       if (follow) thread.scrollTop = thread.scrollHeight; else thread.scrollTop = previousTop;
       controls();
       clearTimeout(timer);

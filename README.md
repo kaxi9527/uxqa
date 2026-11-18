@@ -194,6 +194,8 @@ The command checks desktop and mobile viewports by default. The `uxqa` launcher 
 
 ## Run a scenario
 
+Compare values across views, sessions and state transitions in project repair chat or via the CLI. Rules come from the project or the user's stated expectation. [中文使用说明](docs/product-guide.zh-CN.md#通用逻辑检查) · [English instructions](docs/product-guide.en.md#general-logic-checks) · [Runnable example](examples/logic/scenario.json)
+
 ```bash
 ./uxqa run --config examples/todomvc.json
 ```

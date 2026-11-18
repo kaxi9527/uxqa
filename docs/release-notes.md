@@ -1,3 +1,11 @@
+## UXQA 0.6.1
+
+Project repair chat and the CLI can compare named observations across actions, views and roles. Rules may come from a project file or the current user's explicit expectation. Check equality, change, numeric boundaries and restored state. Unobserved conditions and missing evidence remain unverified. Existing 0.6.0 list scenarios are supported. [Usage and example](product-guide.en.md#general-logic-checks)
+
+## 0.6.0 (local build)
+
+Project chat and the CLI gained isolated actor sessions, before-and-after list snapshots, row-by-row comparisons and explicit evidence gaps. The deadline and assignment examples use synthetic local data.
+
 ## UXQA 0.5.2
 
 Project repair chat now uses the selected finding, screenshot, project rules,

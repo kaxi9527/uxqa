@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>State comparison fixture</title>
+<main>
+  <h1>Value</h1>
+  <output aria-label="Current" id="current"></output>
+  <button type="button" id="change">Increase</button>
+  <button type="button" id="undo">Undo</button>
+</main>
+<script>
+  const state = sessionStorage;
+  if (state.getItem('value') === null) state.setItem('value', '13');
+  function render() { document.querySelector('output').textContent = state.getItem('value'); }
+  document.querySelector('#change').onclick = () => {
+    state.setItem('previous', state.getItem('value'));
+    state.setItem('value', String(Number(state.getItem('value')) + 1));
+    render();
+  };
+  document.querySelector('#undo').onclick = () => {
+    if (state.getItem('previous') !== null) state.setItem('value', state.getItem('previous'));
+    render();
+  };
+  render();
+</script>
+</html>
