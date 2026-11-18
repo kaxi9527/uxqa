@@ -7,6 +7,7 @@ import { measureMotion, measureReflow, traverseKeyboard } from './a11y-checks.js
 import { readGitState, UXQA_VERSION } from './evidence.js';
 import { matchesUrl } from './glob.js';
 import { executeStep } from './steps.js';
+import { runBusinessJourney } from './business-journey.js';
 import type { CheckResult, DataNature, Finding, FlowConfig, HarnessConfig, RunEvidence, RunResult } from './types.js';
 
 export interface RunOptions {
@@ -91,6 +92,19 @@ export async function runAudit(config: HarnessConfig, options: RunOptions): Prom
   try {
     browser = await chromium.launch({ headless: !options.headed });
     evidence.browser = `chromium ${browser.version()}`;
+    // A state-changing journey runs once across roles, independently of the visual viewport matrix.
+    for (const [index, journey] of (config.journeys ?? []).entries()) {
+      const phases = await runBusinessJourney(browser, config.baseUrl, journey, { actorStates: config.actorStates });
+      const file = join(options.outDir, `business-journey-${index + 1}.json`);
+      await writeFile(file, JSON.stringify({ name: journey.name, requirement: journey.requirement, phases }, null, 2), { mode: 0o600 });
+      artifacts.push(file);
+      for (const phase of phases) {
+        const where = { route: phase.route, viewport: 'journey', requirement: journey.requirement, evidence: [file] };
+        const detail = `${phase.actor} · ${phase.phase}: ${phase.detail}`;
+        addCheck({ ...where, check: 'business-journey', dimension: 'behavior', flow: journey.name, status: phase.status, detail, dataNature: config.evidence.dataNature });
+        if (phase.status === 'fail') findings.push({ ...where, id: `journey-${index + 1}-${checks.length}`, kind: 'flow', severity: 'blocking', step: phase.phase, message: detail });
+      }
+    }
     for (const viewport of config.viewports) {
       for (const route of config.routes) {
         const routeFlows = config.flows.filter((candidate) => !candidate.route || candidate.route === route);
@@ -313,6 +327,7 @@ export async function runAudit(config: HarnessConfig, options: RunOptions): Prom
     }
   } catch (error) {
     findings.push({id:'browser-infrastructure',severity:'blocking',kind:'page',message:errorMessage(error),route:'(browser)',viewport:'(all)'});
+    if (!browser) for (const journey of config.journeys ?? []) addCheck({ check: 'business-journey', dimension: 'behavior', status: 'blocked', route: '(browser)', viewport: 'journey', flow: journey.name, requirement: journey.requirement, detail: 'Browser could not start' });
     addCheck({ check: 'page-load', dimension: 'engineering', status: 'blocked', detail: `Browser infrastructure failed: ${errorMessage(error)}`, route: '(browser)', viewport: '(all)' });
   } finally {
     await browser?.close();

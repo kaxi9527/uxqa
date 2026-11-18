@@ -121,9 +121,9 @@ try {
   await page.getByRole('button', { name: '获取模型', exact: true }).click();
   await page.getByText('账号或服务商已添加，但暂未获取到模型。请检查连接后重试。', { exact: true }).waitFor();
   await page.getByRole('button', { name: '获取模型', exact: true }).click();
+  await page.getByRole('option', { name: modelID, exact: true }).waitFor({ state: 'attached', timeout: 30000 });
   const listed = await api('/ai/models', { mode: 'api', connection: 'native' });
   assert(listed.models.includes(modelID), `Fixture model missing: ${JSON.stringify(listed)}`);
-  await page.getByRole('option', { name: modelID, exact: true }).waitFor({ state: 'attached', timeout: 30000 });
   await page.getByRole('combobox', { name: '可用模型', exact: true }).selectOption(modelID);
   await page.getByRole('button', { name: '测试看图连接', exact: true }).click();
   await page.getByText('连接成功，模型看图回答：绿色', { exact: true }).waitFor();

@@ -8,6 +8,16 @@ Add an existing project folder, inspect the discovered component library and pro
 
 Version 0.5.0 organizes work as **Project → Check → Issues → Recheck**. UI, UX, and experience findings are classified separately. Automatic checks, AI suggestions, and manual observations have different evidence boundaries. Unvisited pages, untriggered states, and missing screenshots are not passes.
 
+## General logic checks
+
+Without a requirements document, ask the project assistant to check two views for a contradiction. The built-in same-fact check reads the object identifier, field identifier, version and displayed value independently on each side. It compares values only when all three identifiers match. Field identifiers must account for units and scope. An unknown snapshot leaves the check unverified. In a scenario, each of `sameFact.object`, `sameFact.field` and `sameFact.version` references a pair of observations.
+
+In project repair chat, state the relationship you expect, such as “both views show the same value after the change” or “undo restores the original value”. You can also point to a project file that states the rule. Review the source, object, state and observation points before selecting **Run test scenario**. If two values differ and no rule says they should match, record the difference and leave its business meaning open.
+
+Use `observe` to name text, control values or attributes captured across actions, views or isolated actor sessions. Use `assert` to compare observations with each other or with a constant specified in the requirement. Text supports equality and inequality. Explicit `as: "number"` observations also support ordering and inclusive boundaries. An optional `when` limits applicability. An unwitnessed condition, unreadable value or incompatible type leaves the assertion unverified. An observed contradiction fails it. Lists can be compared by stable identifiers including multiplicity. Reports show individual verdicts and observations.
+
+The CLI accepts the same plans. From the repository root, run `python3 -m http.server 4189 --bind 127.0.0.1 --directory examples/logic`, then `./uxqa run --config examples/logic/scenario.json` in another terminal. Each desktop actor starts with a fresh session. On the CLI, `actorStates` maps actors to independent storage-state files relative to the config. Keep session files outside the repository. [Runnable logic example](../examples/logic/scenario.json)
+
 ## Handle and recheck issues
 
 Open a finding to review its location, evidence, and repair direction. Record a handling state or add a manual observation. Accepting a deviation or manually confirming a result requires a reason. After a fix, repeat the check with comparable rules, pages, viewport sizes, and states. “Not observed again” alone does not prove a fix.

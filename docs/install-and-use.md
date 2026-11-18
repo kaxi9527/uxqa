@@ -4,17 +4,17 @@
 
 UXQA 通过 GitHub 提供下载，直接解压安装，不需要应用商店。下载包自带运行环境和模型模块，无需另外安装 Node.js，也不需要注册 UXQA 账号。AI 功能可以稍后配置。
 
-本说明对应 **v0.5.2**，较早版本的功能可能不同。以[下载页](https://github.com/kaxi9527/uxqa/releases)实际列出的版本为准，展开页面下方的 **Assets**，选择下面对应的文件；`Source code (zip)` / `Source code (tar.gz)` 是开发源码，不是可直接运行的应用。
+本说明对应 **v0.6.1**，较早版本的功能可能不同。以[下载页](https://github.com/kaxi9527/uxqa/releases)实际列出的版本为准，展开页面下方的 **Assets**，选择下面对应的文件；`Source code (zip)` / `Source code (tar.gz)` 是开发源码，不是可直接运行的应用。
 
 ## 1. 选择下载包
 
 | 你的电脑 | 下载文件 |
 | --- | --- |
-| Mac，Apple 芯片（M 系列），macOS 14 或更高 | UXQA-0.5.2-macOS-arm64.zip |
-| Mac，Intel 芯片，macOS 14 或更高 | UXQA-0.5.2-macOS-x64.zip |
-| Windows 11 或更高，Intel / AMD x64 | uxqa-0.5.2-win-x64.zip |
-| Linux，x86_64 / amd64，glibc | uxqa-0.5.2-linux-x64.tar.gz |
-| Linux，aarch64 / arm64，glibc | uxqa-0.5.2-linux-arm64.tar.gz |
+| Mac，Apple 芯片（M 系列），macOS 14 或更高 | UXQA-0.6.1-macOS-arm64.zip |
+| Mac，Intel 芯片，macOS 14 或更高 | UXQA-0.6.1-macOS-x64.zip |
+| Windows 11 或更高，Intel / AMD x64 | uxqa-0.6.1-win-x64.zip |
+| Linux，x86_64 / amd64，glibc | uxqa-0.6.1-linux-x64.tar.gz |
+| Linux，aarch64 / arm64，glibc | uxqa-0.6.1-linux-arm64.tar.gz |
 
 Mac 在“ → 关于本机”查看芯片；Windows 在“设置 → 系统 → 系统信息”查看系统类型；Linux 运行 `uname -m`。Linux 建议使用 Ubuntu 22.04 / 24.04 桌面环境。此版本没有 Windows ARM64 原生包，不支持 Alpine / musl。
 
@@ -22,14 +22,14 @@ Mac 在“ → 关于本机”查看芯片；Windows 在“设置 → 系统 
 
 ```sh
 # macOS；Intel 包请换成对应文件名
-shasum -a 256 UXQA-0.5.2-macOS-arm64.zip
+shasum -a 256 UXQA-0.6.1-macOS-arm64.zip
 # Linux；ARM64 包请换成对应文件名
-sha256sum uxqa-0.5.2-linux-x64.tar.gz
+sha256sum uxqa-0.6.1-linux-x64.tar.gz
 ```
 
 ```powershell
 # Windows PowerShell
-Get-FileHash .\uxqa-0.5.2-win-x64.zip -Algorithm SHA256
+Get-FileHash .\uxqa-0.6.1-win-x64.zip -Algorithm SHA256
 ```
 
 ## 2. 安装并打开
@@ -48,7 +48,7 @@ Get-FileHash .\uxqa-0.5.2-win-x64.zip -Algorithm SHA256
 ### Windows
 
 1. 右键 ZIP → **全部解压缩**，放到自己可写的目录，例如“文档”下的 `UXQA` 文件夹。不要在 ZIP 预览窗口里直接运行。
-2. 打开解压后的 `uxqa-0.5.2-win-x64` 文件夹，双击 **`Open uxqa console.cmd`**。
+2. 打开解压后的 `uxqa-0.6.1-win-x64` 文件夹，双击 **`Open uxqa console.cmd`**。
 3. 会出现终端窗口，并在默认浏览器打开 UXQA 本机界面。使用期间保留该终端窗口；它是 UXQA 的本地服务。
 4. 若出现“Windows 已保护你的电脑”，核对来源与摘要后，在提示中选择 **更多信息 → 仍要运行**（系统提供该选项时）。企业策略、S 模式或 Smart App Control 可能不提供单次放行入口；此时由管理员处理，不要关闭整机防护。[Microsoft 说明](https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/smartscreen-reputation)
 
@@ -62,15 +62,15 @@ Get-FileHash .\uxqa-0.5.2-win-x64.zip -Algorithm SHA256
 
 ```sh
 # x64
-tar -xzf uxqa-0.5.2-linux-x64.tar.gz
-cd uxqa-0.5.2-linux-x64
+tar -xzf uxqa-0.6.1-linux-x64.tar.gz
+cd uxqa-0.6.1-linux-x64
 ./open-uxqa-console.sh
 ```
 
 ```sh
 # ARM64
-tar -xzf uxqa-0.5.2-linux-arm64.tar.gz
-cd uxqa-0.5.2-linux-arm64
+tar -xzf uxqa-0.6.1-linux-arm64.tar.gz
+cd uxqa-0.6.1-linux-arm64
 ./open-uxqa-console.sh
 ```
 
@@ -99,7 +99,7 @@ sudo ./runtime/node ./app/node_modules/playwright-core/cli.js install-deps chrom
 
 ## 4. 权限、数据与常见问题
 
-项目内依次使用「检查 → 问题处理 → 复检」。0.5.2 的项目修复对话可结合问题和截图读取、修改项目文本；请核对修改并重新检查页面。具体步骤和限制见 [使用说明](product-guide.zh-CN.md)。
+项目内依次使用「检查 → 问题处理 → 复检」。在项目修复对话中可以指明预期关系或项目依据，展开计划后点击「运行测试场景」。结果区分通过、失败与待验证。[通用逻辑检查使用说明](product-guide.zh-CN.md#通用逻辑检查)
 
 - **目录访问**：只在使用相应项目时允许读取该目录。无需全盘访问、辅助功能、系统录屏、摄像头或麦克风。写规则、基线、组件同步和项目修复 Agent 的修改会写入项目。
 - **macOS 位置授权**：访问桌面、文稿、下载等受保护位置时，系统可能提示授权，通常会保存你的选择；系统设置、应用更新或位置变化后仍可能需要重新检查。前往“系统设置 → 隐私与安全性 → 文件与文件夹”查看或调整，单次读取成功只代表当时该位置可访问。

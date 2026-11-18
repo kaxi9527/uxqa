@@ -1,6 +1,6 @@
 # Install, use, and update UXQA
 
-UXQA is distributed directly through GitHub Releases; no app store or UXQA account is required. The bundles include their own runtime and model module. Download the archive for your operating system and processor, and keep all extracted files together. This guide describes v0.5.2; earlier downloads may have different features. Check Releases for the versions actually available.
+UXQA is distributed directly through GitHub Releases; no app store or UXQA account is required. The bundles include their own runtime and model module. Download the archive for your operating system and processor, and keep all extracted files together. This guide describes v0.6.1; earlier downloads may have different features. Check Releases for the versions actually available.
 
 ## Download and verify
 
@@ -10,14 +10,14 @@ Download `SHA256SUMS.txt` from the same release. In the download folder, compute
 
 ```sh
 # macOS
-shasum -a 256 UXQA-0.5.2-macOS-arm64.zip
+shasum -a 256 UXQA-0.6.1-macOS-arm64.zip
 # Linux
-sha256sum uxqa-0.5.2-linux-x64.tar.gz
+sha256sum uxqa-0.6.1-linux-x64.tar.gz
 ```
 
 ```powershell
 # Windows PowerShell
-Get-FileHash .\uxqa-0.5.2-win-x64.zip -Algorithm SHA256
+Get-FileHash .\uxqa-0.6.1-win-x64.zip -Algorithm SHA256
 ```
 
 Substitute the actual archive name where necessary.
@@ -34,7 +34,7 @@ The Windows and Linux packages open a local browser interface; macOS uses a nati
 
 Add an existing project folder, inspect its component library and project rules, then start a source check. To inspect rendered pages, start the project's preview server and configure its URL. The optional screenshot browser is downloaded only after confirmation; source checks do not require it. Review the findings and evidence, make changes in your project, and run the same checks again. An unvisited route or missing screenshot is not a passed page review.
 
-Use **Project → Check → Issue handling → Recheck**. In 0.5.2, a project-specific repair conversation can inspect and edit project text, using the findings and available screenshot as context. Review edits and recheck the page. Individual verification records are supplied by their author and do not themselves constitute automatic test results. See the [user guide](product-guide.en.md) and [quality workflow](quality-workflow.md) for coverage and limitations.
+Use **Project → Check → Issue handling → Recheck**. In project repair chat, state an expected relationship or cite a project requirement. Review the plan and select **Run test scenario**. Each relationship receives a pass, fail or unverified result. [General logic checks](product-guide.en.md#general-logic-checks)
 
 AI review is optional. Configure an API provider or connect your own supported subscription account in model settings, fetch models, select a vision-capable model, test it, and save. Connecting successfully does not establish that every model or subscription feature is available. Claude subscriptions require the official Claude Code runtime; Google subscription authorization requires an appropriately configured OAuth client.
 
