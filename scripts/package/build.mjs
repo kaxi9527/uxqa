@@ -261,6 +261,10 @@ async function packageTarget(target, app, versions) {
   await buildModelCore(target, join(dir, 'model-core'));
   for (const name of ['LICENSE', 'THIRD_PARTY_NOTICES.md']) await copyFile(join(ROOT, name), join(dir, name));
   await copyFile(join(ROOT, 'docs/local-data-and-permissions.md'), join(dir, 'LOCAL-DATA-AND-PERMISSIONS.md'));
+  await mkdir(join(dir, 'docs'));
+  for (const name of ['install-and-use.md','install-and-use.en.md','product-guide.zh-CN.md','product-guide.en.md','release-notes.md','release-notes.zh-CN.md','assurance-workflows.md','local-data-and-permissions.md']) {
+    await copyFile(join(ROOT, 'docs', name), join(dir, 'docs', name));
+  }
   await copyFile(join(ROOT, 'assets/icon.png'), join(dir, 'icon.png'));
   const browser = await browserSizes(app, target);
   await writeFile(join(dir, 'app/browser-sizes.json'), `${JSON.stringify(browser.sizes, null, 2)}\n`);

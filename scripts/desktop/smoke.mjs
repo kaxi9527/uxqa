@@ -139,6 +139,25 @@ try {
   await writeFile(join(projectRoot, 'package.json'), JSON.stringify({ name: 'desktop-agent-fixture' }));
   await writeFile(join(projectRoot, 'src', 'Page.tsx'), 'export const Page = () => <button>Test</button>;');
   const agentProject = (await api('/projects', { path: projectRoot })).project;
+  const projectPath='/projects/'+agentProject.id;
+  const specialist=await api(projectPath+'/assurance');
+  assert(specialist.suites.length===8 && specialist.suites.every(s=>s.checks.length===3),'All eight specialist workflows must be in the desktop bundle');
+  let check=(await api(projectPath+'/check',{skipPages:true})).job;
+  for(let i=0;i<120 && check.state==='running';i++){
+    await new Promise(r=>setTimeout(r,100));
+    check=(await api(projectPath+'/jobs/'+check.id)).job;
+  }
+  const round=(await api(projectPath+'/rounds')).rounds[0];
+  assert(round && check.state!=='failed','Packaged source check must save a real round');
+  const reviews=projectPath+'/assurance/reviews';
+  const sample=await api(reviews,{roundId:round.id,suite:'interaction',procedure:0,task:'Read the button',scope:'Local desktop fixture',
+    expected:'The label is Test',source:'Fixture specification',partition:'development',variant:'target',factIds:[],observation:'Button label reads Test',location:'Page.tsx fixture'});
+  for(const reviewer of ['first','second']){
+    const rated=await api(reviews+'/'+sample.id+'/rate',{reviewer,grade:'pass',reason:'The recorded label meets the criterion'});
+    assert(reviewer==='first'?!rated.ratings:rated.final==='pass','Packaged blind review must seal the first rating and settle the second');
+  }
+  const metrics=(await api(reviews+'/metrics')).groups.find(g=>g.suite==='interaction');
+  assert(metrics?.counts.doubleReviewed===1 && metrics.counts.humanAgree===1 && metrics.counts.predictions===0,'Packaged calibration counts actual independent ratings');
   await api(`/projects/${agentProject.id}/agent/messages`, { text: '检查这个页面' });
   let agent = await api(`/projects/${agentProject.id}/agent`);
   for (let attempt = 0; agent.running && attempt < 120; attempt++) { await new Promise((done) => setTimeout(done, 100)); agent = await api(`/projects/${agentProject.id}/agent`); }

@@ -7,6 +7,7 @@
 [Download / 下载](https://github.com/kaxi9527/uxqa/releases) · [安装与使用](docs/install-and-use.md) · [数据与权限说明](docs/local-data-and-permissions.md) · [Contribute](CONTRIBUTING.md) · [Report an issue](https://github.com/kaxi9527/uxqa/issues)
 
 [English installation and update guide](docs/install-and-use.en.md)
+ · [预览版专项检测 / Preview check workflows](docs/assurance-workflows.md)
  · [中文使用说明](docs/product-guide.zh-CN.md) · [English user guide](docs/product-guide.en.md) · [更新说明 / Release notes](docs/release-notes.zh-CN.md)
 
 UXQA 是一个本地运行的界面检查工具：检查组件复用、页面溢出与可访问性，保存截图和复现证据，并可选择连接模型做看图复核。模型接入中心把协议配置、订阅登录和账号管理放在同一个产品里。

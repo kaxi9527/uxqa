@@ -36,25 +36,32 @@ export async function setIssueDisposition(projectId: string, fingerprint: string
   return workflow;
 }
 
-export async function addObservation(projectId: string, input: { name: string; detail: string; location: string; domain: IssueDomain; fix: string }): Promise<IssueWorkflow> {
+export async function addObservation(projectId: string, input: { name: string; detail: string; location: string; domain: IssueDomain; assuranceSuite?: string; fix: string }): Promise<IssueWorkflow> {
   const workflow = await readIssueWorkflow(projectId);
   workflow.observations.push({ name: input.name, title: '人工记录', what: input.detail, consequence: '这是人工观察记录，需要按描述重现并验证。',
     fix: input.fix || '先按记录的操作重现，再根据项目规范修复并复检。', rule: 'manual/observation', origin: 'manual', domain: input.domain,
-    level: 'reference', file: input.location, line: 0, column: 0, snippet: '', detail: input.detail, status: 'new', fingerprint: `manual-${randomUUID()}` });
+    ...(input.assuranceSuite ? { assuranceSuite: input.assuranceSuite } : {}), level: 'reference', file: input.location, line: 0, column: 0, snippet: '', detail: input.detail, status: 'new', fingerprint: `manual-${randomUUID()}` });
   await save(projectId, workflow);
   return workflow;
 }
 
-export function recheckComparison(previous: Round | undefined, current: Round) {
+export function recheckComparison(previous: Round | undefined, current: Round, locale: 'zh' | 'en' | null = 'zh') {
   if (!previous) return { previous: null, current: current.id, items: [] };
   const currentById = new Map(current.result.violations.map((issue) => [issue.fingerprint, issue]));
   const items = previous.result.violations.filter((issue) => issue.status === 'new').map((issue) => {
     const found = currentById.get(issue.fingerprint);
     // Absence is not proof of repair: source/rule/route coverage can change between rounds.
-    return { fingerprint: issue.fingerprint, name: issue.name, file: issue.file,
-      status: found?.status === 'new' ? 'present' : found ? 'excluded' : 'not-observed',
-      explanation: found?.status === 'new' ? '本轮仍然检出' : found ? '已进入基线或忽略项，不代表修复' : current.partial ? '本轮覆盖不完整，尚不能确认修复' : '本轮未再检出；请结合相同规则、页面状态与证据确认',
+    const status = found?.status === 'new' ? 'present' : found ? 'excluded' : 'not-observed';
+    const explanations = {
+      present: ['本轮仍然检出', 'Detected again in this round.'],
+      excluded: ['已进入基线或忽略项，不代表修复', 'Now in the baseline or ignored. The repair still needs verification.'],
+      'not-observed': current.partial
+        ? ['本轮覆盖不完整，尚不能确认修复', 'Coverage was incomplete this round. The repair still needs verification.']
+        : ['本轮未再检出；请结合相同规则、页面状态与证据确认', 'No longer detected. Confirm using the same rules, page state and evidence.'],
     };
+    return { fingerprint: issue.fingerprint, name: locale === 'en' ? issue.english?.name ?? issue.name : issue.name,
+      file: locale === 'en' && issue.rule.startsWith('visual/') ? issue.file.replace(/^页面 /, 'Page ') : issue.file,
+      status, explanation: explanations[status][locale === 'en' ? 1 : 0] };
   });
   return { previous: previous.id, current: current.id, items };
 }

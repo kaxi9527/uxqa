@@ -19,6 +19,15 @@ const TOPICS: Array<[RegExp, string]> = [
   [/form|input|validation/, 'forms'],
 ];
 
+const SUITE_RULES: Array<[RegExp,string]> = [
+  [/component|library|token|hardcoded|arbitrary-size|repeated-pattern|variant/, 'components'],
+  [/contrast|tap-area|alt-text|accessible|keyboard|focus|field-label|control-name|heading-order|reduced-motion/, 'accessibility'],
+  [/overflow|clip|responsive|long-text|locale|viewport/, 'compatibility'],
+  [/opener|button-type|navigation|dialog|form|input/, 'interaction'],
+  [/animation|transition|performance|motion/, 'performance'],
+  [/^visual\//, 'fidelity'],
+];
+
 export function issueGuidance(violation: Violation) {
   const topic = TOPICS.find(([pattern]) => pattern.test(violation.rule))?.[1];
   const query = `${violation.name} ${violation.what} ${violation.detail}`.toLowerCase();
@@ -28,7 +37,8 @@ export function issueGuidance(violation: Violation) {
   const fallback = violation.domain === 'experience' ? 'motion-purpose' : violation.domain === 'ui' ? 'hierarchy' : 'review';
   const guide = GUIDES.find((entry) => entry.id === topic) ?? (candidates[0]?.score ? candidates[0].entry : GUIDES.find((entry) => entry.id === fallback)!);
   const domain: IssueDomain = violation.domain ?? guide.domain;
-  return { domain, label: DOMAIN_LABELS[domain], guide,
+  const suite = violation.assuranceSuite ?? SUITE_RULES.find(([pattern]) => pattern.test(violation.rule))?.[1] ?? null;
+  return { domain, suite, label: DOMAIN_LABELS[domain], guide,
     evidence: violation.origin === 'manual' ? '人工观察，尚未自动验证' : violation.origin === 'ai' ? 'AI 看图建议' : violation.rule.startsWith('visual/') ? '网页检查' : '源码检查',
     basis: violation.domain ? '报告分类' : '规则对应的参考分类',
   };

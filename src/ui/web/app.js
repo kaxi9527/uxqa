@@ -65,6 +65,9 @@ const ICONS = {
   folder: ['M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z'],
   check: ['M5 12l5 5 9-10'],
   scan: ['M4 8V5a1 1 0 0 1 1-1h3', 'M16 4h3a1 1 0 0 1 1 1v3', 'M20 16v3a1 1 0 0 1-1 1h-3', 'M8 20H5a1 1 0 0 1-1-1v-3', 'M4 12h16'],
+  layout: ['M3 5h18v14H3z', 'M3 10h18', 'M9 10v9'],
+  pointer: ['M5 3l14 10-7 1.5-3.5 6z'],
+  pulse: ['M2 12h5l3-7 4 14 3-7h5'],
   info: ['M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18z', 'M12 11v5', 'M12 8h.01'],
   file: ['M7 3h7l5 5v13H7z', 'M14 3v5h5'],
   wand: ['M5 19L17 7', 'M15 5l4 4', 'M19 13v2', 'M18 14h2', 'M9 3v2', 'M8 4h2'],
@@ -111,14 +114,8 @@ function timeText(iso) {
   return `${date.getMonth() + 1}月${date.getDate()}日 ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 }
 
-const AVATARS = [['#e8f0fb', '#224f8f'], ['#e5f3ea', '#23663e'], ['#fbf2dd', '#7a5200'], ['#f1e9fb', '#5b2a86'], ['#fbeae9', '#9c2a26'], ['#e6f4f4', '#1f5f60']];
 function avatar(name) {
-  let sum = 0;
-  for (const char of name) sum += char.codePointAt(0);
-  const [bg, fg] = AVATARS[sum % AVATARS.length];
   const element = h('span', { class: 'avatar', 'aria-hidden': 'true', text: [...name][0].toUpperCase() });
-  element.style.background = bg;
-  element.style.color = fg;
   return element;
 }
 
@@ -138,10 +135,12 @@ function openOverlay(build, { kind = 'sheet', label, dismissible = true } = {}) 
     const panel = h('div', { class: kind === 'drawer' ? 'drawer' : 'sheet', role: 'dialog', 'aria-modal': 'true', 'aria-label': label });
     build(panel, close);
     const wrap = h('div', { class: kind === 'drawer' ? 'drawer-wrap' : 'backdrop', onclick: (event) => { if (dismissible && event.target === wrap) close(false); } }, panel);
+    const focusable = () => [...panel.querySelectorAll('button, [href], input, textarea, select, summary, [tabindex]')]
+      .filter((item) => item.tabIndex >= 0 && !item.matches(':disabled') && item.getClientRects().length);
     function onKey(event) {
       if (event.key === 'Escape' && dismissible) { event.preventDefault(); close(false); }
       if (event.key === 'Tab') {
-        const items = [...panel.querySelectorAll('button, [href], input, textarea, select')];
+        const items = focusable();
         if (!items.length) return;
         const first = items[0];
         const last = items[items.length - 1];
@@ -153,7 +152,8 @@ function openOverlay(build, { kind = 'sheet', label, dismissible = true } = {}) 
     root.replaceChildren(wrap);
     // Everything behind the dialog is out of reach for Tab, clicks and screen readers until it closes.
     for (const element of background) element.inert = true;
-    const focusTarget = panel.querySelector('[data-autofocus]') || panel.querySelector('button, input, textarea, select');
+    const items = focusable();
+    const focusTarget = items.find((item) => item.hasAttribute('data-autofocus')) || items[0];
     if (focusTarget) focusTarget.focus();
   });
 }
@@ -163,8 +163,8 @@ function confirmSheet({ title, body, confirmText, cancelText = accessText('取�
     append(panel, [
       h('h2', { text: title }), body,
       h('div', { class: 'row' }, h('span', { class: 'grow' }),
-        h('button', { class: 'btn', type: 'button', 'data-autofocus': true, onclick: () => close(false) }, cancelText),
-        h('button', { class: 'btn primary', type: 'button', onclick: () => close(true) }, confirmText)),
+        antButton(cancelText, () => close(false), { 'data-autofocus': true }),
+        antButton(confirmText, () => close(true), { type: 'primary' })),
     ]);
   }, { label: title });
 }
@@ -263,6 +263,7 @@ const state = {
   selected: null,
   agentDrafts: {},
   agentFindings: {},
+  repairMode: 'chat',
   view: 'crop',
   shown: PAGE_SIZE,
   error: '',
@@ -278,7 +279,7 @@ function renderRail() {
     h('div', { class: 'rail-label', text: accessText('项目', 'Projects') }),
     h('div', { class: 'rail-list' }, state.projects.length ? state.projects.map((entry) => {
       const last = entry.lastRound;
-      return h('button', { class: 'project', type: 'button', 'data-button-wrap': 'allow', 'aria-current': entry.id === state.current && !state.global ? 'true' : 'false', title: entry.root, onclick: () => selectProject(entry.id) },
+      return h('button', { class: 'project', type: 'button', 'data-button-wrap': 'allow', 'aria-label': entry.name, 'aria-current': entry.id === state.current && !state.global ? 'true' : 'false', title: entry.root, onclick: () => selectProject(entry.id) },
         avatar(entry.name),
         h('span', { class: 'project-text' }, h('span', { class: 'project-name ellipsis', text: entry.name }), h('span', { class: 'project-sub ellipsis', text: last ? accessText(`上次检测 ${timeText(last.at)}`, `Last checked ${timeText(last.at)}`) : accessText('还没检测过', 'Not checked yet') })),
         last ? h('span', { class: `count${last.newMust ? '' : ' zero'}`, 'aria-label': accessText(`${last.newMust} 个需要改`, `${last.newMust} must-fix issues`), text: last.newMust ? String(last.newMust) : '✓' }) : null);
@@ -381,7 +382,8 @@ async function loadProjects() {
 }
 
 async function selectProject(id) {
-  Object.assign(state, { global: false, current: id, tab: 'checks', domain: 'all', issueState: 'all', workflow: { dispositions: {}, observations: [] }, round: null, rounds: [], library: null, level: 'all', title: 'all', query: '', withShot: false, selected: null, shown: PAGE_SIZE, error: '' });
+  resetFindingFilters();
+  Object.assign(state, { global: false, current: id, tab: 'checks', repairMode: 'chat', workflow: { dispositions: {}, observations: [] }, round: null, rounds: [], library: null, error: '' });
   renderRail();
   renderWorkspace();
   try {
@@ -402,13 +404,15 @@ function rememberPlace() {
   else {
     if (state.current) query.set('project', state.current);
     if (state.tab !== 'issues') query.set('tab', state.tab);
+    if (state.tab === 'agent' && state.repairMode === 'prompt') query.set('open', 'prompt');
   }
   const next = `${location.pathname}${query.toString() ? `?${query}` : ''}`;
   if (`${location.pathname}${location.search}` !== next) history.replaceState(null, '', next);
 }
 
-function openGlobal() {
+function openGlobal(source) {
   state.global = true;
+  state.settingsFromChat = source === 'repair';
   renderRail();
   renderWorkspace();
 }
@@ -416,16 +420,18 @@ function openGlobal() {
 /** Settings shared by every project: AI screenshot review, connecting AI assistants, where data lives. */
 function renderGlobal(workspace) {
   const access = h('div', { class: 'panel' });
-  const ai = h('div', { class: 'panel' }, h('h2', { text: accessText('AI 看图复核（可选）', 'AI image review (optional)') }), h('p', { class: 'muted', text: accessText('正在读取…', 'Loading…') }));
+  const ai = h('div', { class: 'panel' }, h('p', { class: 'muted', text: accessText('正在读取模型设置…', 'Loading model settings…') }));
   const agent = h('div', { class: 'panel' }, h('h2', { text: accessText('连接你的 AI 助手', 'Connect an AI assistant') }), h('p', { class: 'muted', text: accessText('正在读取…', 'Loading…') }));
   const data = h('div', { class: 'panel' }, h('h2', { text: accessText('数据存放', 'Data storage') }), h('p', { class: 'muted', text: accessText('正在读取…', 'Loading…') }));
   const retention = h('div', { role: 'status' });
   const browser = h('div', { class: 'panel' }, h('h2', { text: accessText('浏览器组件', 'Browser component') }), h('p', { class: 'muted', text: accessText('正在读取…', 'Loading…') }));
   fill(workspace,
-    h('header', { class: 'topbar' }, h('div', { class: 'topbar-row' }, h('div', { class: 'title grow' }, h('h1', { text: accessText('设置', 'Settings') }), h('span', { text: accessText('这里的设置所有项目通用', 'Settings apply to all projects') })))),
-    h('section', { class: 'content' }, h('div', { class: 'page settings-page' }, access, ai, agent, browser, data)));
-  renderAccessPanel(access);
+    h('header', { class: 'topbar' }, h('div', { class: 'topbar-row' }, h('div', { class: 'title grow' }, h('h1', { text: state.settingsFromChat ? accessText('模型设置', 'Model settings') : accessText('设置', 'Settings') }), h('span', { text: accessText('这里的设置所有项目通用', 'Settings apply to all projects') })),
+      state.settingsFromChat ? antButton(accessText('返回修复对话', 'Back to repair chat'), () => { state.global = false; renderRail(); openProjectAgent(); }) : null)),
+    h('section', { class: 'content' }, h('div', { class: 'page settings-page' }, state.settingsFromChat ? ai : [access, ai, agent, browser, data])));
   renderAiPanel(ai);
+  if (state.settingsFromChat) return;
+  renderAccessPanel(access);
   renderBrowserPanel(browser);
   api('/ai').then((info) => {
     const quote = (value) => (/[\s"']/.test(value) ? `"${value.replace(/"/g, '\\"')}"` : value);
@@ -465,7 +471,7 @@ function renderWorkspace() {
       h('ol', { class: 'steps' },
         step(1, accessText('添加项目', 'Add a project'), accessText('填写项目文件夹，或按需扫描 ~/Projects。', 'Enter a project folder or scan ~/Projects on request.'), h('button', { class: 'btn', type: 'button', onclick: openAddProject }, icon('plus'), accessText('自己选文件夹', 'Choose a folder'))),
         step(2, accessText('预览地址（自动找）', 'Preview URL (discovered automatically)'), accessText('添加时会自动找项目在本机跑着的地址；没跑起来会告诉你用哪条命令启动。有了地址，问题就能配上截图。', 'UXQA looks for a running local preview. A preview lets checks attach screenshots.')),
-        step(3, accessText('开始检测，让 AI 修', 'Run a check and address issues'), accessText('看完问题，点"让 AI 修"复制给写代码的 AI，改完再检测一次。', 'Review the findings, optionally copy them for a coding assistant, then check again.'))))));
+        step(3, accessText('检查并修复', 'Check and repair'), accessText('查看问题后，点「让 AI 修」和项目的模型讨论，改完再复检。', 'Review a finding and select Ask AI to repair to discuss it with the project model, then recheck.'))))));
     return;
   }
   const library = state.library;
@@ -474,25 +480,31 @@ function renderWorkspace() {
       : h('span', { class: 'chip warn', text: accessText('没有找到组件库', 'No component library found') });
   const nav = h('div', { class: 'nav', role: 'tablist', 'aria-label': accessText('项目功能', 'Project features') }, TABS.map(([id, label, english]) => h('button', {
     type: 'button', role: 'tab', id: `tab-${id}`, 'aria-selected': state.tab === id ? 'true' : 'false', tabindex: state.tab === id ? '0' : '-1',
-    onclick: () => { state.tab = id; renderWorkspace(); },
+    onclick: () => chooseTab(id),
     onkeydown: (event) => {
-      if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
+      if (!['ArrowRight', 'ArrowLeft', 'Home', 'End'].includes(event.key)) return;
+      event.preventDefault();
       const index = TABS.findIndex(([key]) => key === id);
-      const next = TABS[(index + (event.key === 'ArrowRight' ? 1 : TABS.length - 1)) % TABS.length][0];
-      state.tab = next; renderWorkspace(); document.getElementById(`tab-${next}`).focus();
+      const nextIndex = event.key === 'Home' ? 0 : event.key === 'End' ? TABS.length - 1
+        : (index + (event.key === 'ArrowRight' ? 1 : TABS.length - 1)) % TABS.length;
+      chooseTab(TABS[nextIndex][0]);
     },
   }, accessText(label, english))));
   const topbar = h('header', { class: 'topbar' },
     h('div', { class: 'topbar-row' },
       h('div', { class: 'title grow' }, h('h1', { class: 'ellipsis', text: entry.name }), h('span', { class: 'ellipsis', title: entry.root, text: entry.root })),
       chip,
-      state.round ? h('button', { class: 'btn quiet', type: 'button', onclick: openPrompt }, icon('wand'), accessText('让 AI 修', 'Copy for AI')) : null,
-      runner()),
+      h('button', { class: 'btn quiet', type: 'button', onclick: () => openProjectAgent(state.tab === 'issues' ? freshViolations().find((item) => item.fingerprint === state.selected) : null) }, icon('wand'), accessText('让 AI 修', 'Ask AI to repair')),
+      h('span', { id: 'runner-slot' }, runner())),
     nav,
     state.error ? h('div', { class: 'notice error row', role: 'alert' }, h('span', { class: 'grow', text: state.error }), h('button', { class: 'icon-btn', type: 'button', 'aria-label': accessText('关闭提示', 'Dismiss message'), onclick: () => { state.error = ''; renderWorkspace(); } }, icon('close'))) : null);
   const body = h('section', { class: state.tab === 'issues' ? '' : 'content', role: 'tabpanel', 'aria-labelledby': `tab-${state.tab}` });
   body.style.minHeight = '0';
   fill(workspace, topbar, body);
+  if (nav.scrollWidth > nav.clientWidth) {
+    const active = nav.querySelector('[aria-selected="true"]');
+    if (active) nav.scrollLeft = Math.max(0, active.getBoundingClientRect().right - nav.getBoundingClientRect().right + 8);
+  }
   if (state.tab === 'checks') renderCheckCenter(body);
   if (state.tab === 'issues') renderIssues(body);
   if (state.tab === 'agent') renderProjectAgent(body);
@@ -506,6 +518,12 @@ function step(number, title, text, action) {
   return h('li', { class: 'step' }, h('span', { class: 'step-num', 'aria-hidden': 'true', text: String(number) }), h('div', { class: 'grow' }, h('strong', { text: title }), h('p', { class: 'muted', text })), action || null);
 }
 
+function chooseTab(tab) {
+  if (tab === 'agent' && state.tab === 'issues' && state.selected) state.agentFindings[state.current] = state.selected;
+  state.tab = tab;
+  renderKeepingFocus('#tab-' + tab);
+}
+
 function emptyState(iconName, title, text, action) {
   return h('div', { class: 'empty' }, h('div', { class: 'empty-box' }, h('div', { class: 'empty-icon' }, icon(iconName)), h('h2', { text: title }), h('p', { text }), action || null));
 }
@@ -513,7 +531,11 @@ function emptyState(iconName, title, text, action) {
 // ---------- running a check ----------
 function runner() {
   const job = state.job;
-  if (!job || job.state !== 'running') return h('button', { id: 'runner', class: 'btn primary', type: 'button', onclick: startCheck }, icon('play'), accessText('开始检测', 'Start check'));
+  if (!job || job.state !== 'running') {
+    if (state.tab === 'recheck' && state.round) return null;
+    const reviewFirst = state.tab === 'checks' && freshViolations().length > 0;
+    return antButton(accessText('开始检测', 'Start check'), () => startCheck(), { id: 'runner', type: reviewFirst ? undefined : 'primary' });
+  }
   const percent = job.phase === 'source' ? 6 : job.phase === 'saving' ? 100 : job.total ? Math.max(8, Math.round((job.done / job.total) * 100)) : 8;
   const fillBar = h('span');
   fillBar.style.width = `${percent}%`;
@@ -524,12 +546,16 @@ function runner() {
 }
 
 function updateRunner() {
-  const current = document.getElementById('runner');
-  if (current) current.replaceWith(runner());
+  const slot = document.getElementById('runner-slot');
+  if (slot) fill(slot, runner());
+  const recheck = document.getElementById('run-recheck');
+  if (recheck) recheck.disabled = state.job?.state === 'running';
 }
 
 async function startCheck(options = {}) {
   if (state.job && state.job.state === 'running') return;
+  const originTab = state.tab;
+  const resultTab = options.resultTab || (originTab === 'recheck' ? 'recheck' : 'issues');
   state.error = '';
   // The first start may check whether the screenshot browser is here, which can take a few seconds.
   const slow = setTimeout(() => toast(accessText('正在准备检测…', 'Preparing check…')), 700);
@@ -539,8 +565,8 @@ async function startCheck(options = {}) {
     if (error.status === 409 && error.data.job) state.job = error.data.job;
     else if (error.status === 409 && error.data.browser) {
       const answer = await browserSheet(error.data.browser);
-      if (answer === 'installed') return startCheck();
-      if (answer === 'skip') return startCheck({ skipPages: true });
+      if (answer === 'installed') return startCheck({ resultTab });
+      if (answer === 'skip') return startCheck({ skipPages: true, resultTab });
       return;
     }
     else {
@@ -550,10 +576,10 @@ async function startCheck(options = {}) {
     }
   }
   updateRunner();
-  pollJob(state.current);
+  pollJob(state.current, originTab, resultTab);
 }
 
-async function pollJob(projectId) {
+async function pollJob(projectId, originTab = state.tab, resultTab = 'issues') {
   while (state.job && state.job.state === 'running' && state.current === projectId) {
     await new Promise((resolve) => setTimeout(resolve, 600));
     try { state.job = (await api(`/projects/${projectId}/jobs/${state.job.id}`)).job; }
@@ -570,10 +596,15 @@ async function pollJob(projectId) {
     renderWorkspace(); toast(state.error); updateRunner(); return;
   }
   state.rounds = (await api(`/projects/${projectId}/rounds`)).rounds;
-  if (job.roundId) await openRound(job.roundId, false);
   await loadProjects();
-  state.tab = 'issues';
-  renderWorkspace();
+  if (state.current !== projectId) return;
+  const viewingOrigin = !state.global && state.tab === originTab;
+  if (job.roundId && (viewingOrigin || !state.round)) await openRound(job.roundId, false);
+  if (viewingOrigin && !state.global && state.tab === originTab) {
+    switchWorkflowTab(resultTab);
+  } else {
+    updateRunner();
+  }
   toast(job.state === 'cancelled' ? accessText('已取消，保留了已完成的部分', 'Canceled; completed results were kept') : job.phase === 'ai' && job.message ? accessText(job.message, 'AI review finished; check the results.') : accessText('检测完成', 'Check complete'));
 }
 
@@ -611,39 +642,43 @@ async function openRound(id, render = true) {
   if (render) renderWorkspace();
 }
 
-function openPrompt() {
-  // A short first batch works better with coding AIs; everything is one click away.
-  const FIRST = 10;
-  const total = state.round.result.violations.filter((violation) => violation.status === 'new').length;
-  let all = total <= FIRST;
-  const text = h('pre', { class: 'mono' });
-  const hint = h('p', { class: 'muted' });
-  const show = () => {
-    text.textContent = all ? state.prompt : state.promptFirst;
-    hint.textContent = all ? accessText('一次发太多，AI 容易漏改或改乱；问题多时建议分批。', 'For many findings, smaller batches can be easier to review.') : accessText(`先把最要紧的 ${FIRST} 个发给 AI，改完检测一次，再复制下一批。`, `Send the first ${FIRST} findings, recheck, then copy the next batch.`);
-    for (const button of document.querySelectorAll('.drawer .seg [data-prompt-choice]')) button.setAttribute('aria-pressed', String((button.dataset.promptChoice === 'all') === all));
-  };
-  queueMicrotask(show);
-  openOverlay((panel, close) => {
-    append(panel, [
-      h('div', { class: 'drawer-head' }, h('h2', { class: 'grow', text: accessText('给 AI 的修复提示', 'Repair prompt for AI') }), h('button', { class: 'icon-btn', type: 'button', 'aria-label': accessText('关闭', 'Close'), onclick: () => close(false) }, icon('close'))),
-      h('div', { class: 'drawer-body stack' },
-        h('ol', { class: 'howto' },
-          h('li', { text: accessText('点下面的"复制"。', 'Select Copy below.') }),
-          h('li', { text: accessText('粘贴给帮你写代码的 AI（Claude Code、Cursor、Codex 等），发送。', 'Paste it into your coding assistant and send it.') }),
-          h('li', { text: accessText('AI 改完后回到这里，点右上角"开始检测"，看问题有没有变少。', 'After changes, return and run another check to review the results.') })),
-        total > FIRST ? h('div', { class: 'seg', role: 'group', 'aria-label': accessText('复制多少个问题', 'Number of findings to copy') },
-          h('button', { type: 'button', 'data-prompt-choice': 'first', 'aria-pressed': String(!all), onclick: () => { all = false; show(); } }, accessText(`先修最重要的 ${FIRST} 个（推荐）`, `First ${FIRST} findings (recommended)`)),
-          h('button', { type: 'button', 'data-prompt-choice': 'all', 'aria-pressed': String(all), onclick: () => { all = true; show(); } }, accessText(`全部 ${total} 个`, `All ${total} findings`))) : null,
-        hint, text),
-      h('div', { class: 'drawer-foot' }, h('span', { class: 'grow faint', text: accessText(`第 ${state.round.number} 轮`, `Round ${state.round.number}`) }), h('button', { class: 'btn primary', type: 'button', 'data-autofocus': true, onclick: () => copy(all ? state.prompt : state.promptFirst, accessText('修复提示', 'repair prompt')) }, icon('copy'), accessText('复制', 'Copy'))),
-    ]);
-  }, { kind: 'drawer', label: accessText('给 AI 的修复提示', 'Repair prompt for AI') });
-}
-
 // ---------- issues ----------
 function freshViolations() {
   return state.round ? state.round.result.violations.filter((violation) => violation.status === 'new') : [];
+}
+
+function resetFindingFilters(domain = 'all') {
+  state.suiteFilter = 'all';
+  state.issueListPosition = null;
+  Object.assign(state, { domain, issueState: 'all', level: 'all', title: 'all', query: '', withShot: false, aiDoubt: false, moreFiltersOpen: false, selected: null, view: 'crop', shown: PAGE_SIZE });
+}
+
+function matchingFindings(fresh) {
+  const query = state.query.trim().toLowerCase();
+  const hasShot = (violation) => { const capture = state.round.capture && state.round.capture.captures[violation.fingerprint]; return !!(capture && capture.shots && capture.shots.length); };
+  return fresh.filter((violation) => (state.level === 'all' || violation.level === state.level)
+    && (state.domain === 'all' || violation.quality?.domain === state.domain)
+    && (!state.suiteFilter || state.suiteFilter === 'all' || violation.quality?.suite === state.suiteFilter)
+    && (state.issueState === 'all' || (state.workflow.dispositions[violation.fingerprint]?.state || 'open') === state.issueState)
+    && (!state.withShot || hasShot(violation))
+    && (!state.aiDoubt || (violation.ai && violation.ai.verdict === 'not-real'))
+    && (state.title === 'all' || violation.title === state.title)
+    && (!query || `${violation.file}:${violation.line} ${violation.name} ${violation.title} ${violation.what}`.toLowerCase().includes(query)));
+}
+
+function showFinding(fingerprint) {
+  const fresh = freshViolations();
+  let index = matchingFindings(fresh).findIndex((item) => item.fingerprint === fingerprint);
+  if (index < 0) {
+    resetFindingFilters();
+    index = fresh.findIndex((item) => item.fingerprint === fingerprint);
+  }
+  if (state.selected !== fingerprint) state.view = 'crop';
+  state.selected = fingerprint;
+  state.shown = Math.max(state.shown, index + 1);
+  switchWorkflowTab('issues');
+  document.getElementById(rowId(fingerprint))?.scrollIntoView({ block: 'nearest' });
+  document.getElementById('finding-heading')?.focus({ preventScroll: true });
 }
 
 function renderIssues(body) {
@@ -664,88 +699,162 @@ function renderIssues(body) {
   }
   const fresh = freshViolations();
   const numbered = new Map(fresh.map((violation, index) => [violation.fingerprint, index + 1]));
-  const query = state.query.trim().toLowerCase();
-  const hasShot = (violation) => { const capture = state.round.capture && state.round.capture.captures[violation.fingerprint]; return !!(capture && capture.shots && capture.shots.length); };
-  const filtered = fresh.filter((violation) => (state.level === 'all' || violation.level === state.level)
-    && (state.domain === 'all' || violation.quality?.domain === state.domain)
-    && (state.issueState === 'all' || (state.workflow.dispositions[violation.fingerprint]?.state || 'open') === state.issueState)
-    && (!state.withShot || hasShot(violation))
-    && (!state.aiDoubt || (violation.ai && violation.ai.verdict === 'not-real'))
-    && (state.title === 'all' || violation.title === state.title)
-    && (!query || `${violation.file}:${violation.line} ${violation.name} ${violation.title} ${violation.what}`.toLowerCase().includes(query)));
-  if (state.selected && !filtered.some((violation) => violation.fingerprint === state.selected) && window.innerWidth > 820) state.selected = filtered[0] ? filtered[0].fingerprint : null;
-  const selected = fresh.find((violation) => violation.fingerprint === state.selected) || null;
+  const filtered = matchingFindings(fresh);
+  if (!filtered.some((violation) => violation.fingerprint === state.selected)) {
+    state.selected = window.innerWidth > 820 ? filtered[0]?.fingerprint ?? null : null;
+  }
+  const selected = filtered.find((violation) => violation.fingerprint === state.selected) || null;
   body.style.height = '100%';
-  fill(body, h('div', { class: `split${selected ? ' has-selection' : ''}` }, issueList(fresh, filtered, numbered), detailPane(selected, filtered, numbered)));
+  const list = issueList(fresh, filtered, numbered, choose);
+  const split = h('div', { class: `split${selected ? ' has-selection' : ''}` }, list.pane, detailPane(selected, filtered, numbered, choose));
+  fill(body, split);
+  list.restorePosition();
+
+  function choose(fingerprint, keepListFocus = false) {
+    const previous = state.selected;
+    const item = fingerprint ? filtered.find((finding) => finding.fingerprint === fingerprint) : null;
+    const oldRow = list.pane.querySelector('.issue-row[tabindex="0"]');
+    if (oldRow) { oldRow.tabIndex = -1; oldRow.setAttribute('aria-selected', 'false'); }
+    state.selected = fingerprint;
+    state.view = 'crop';
+    const index = filtered.findIndex((finding) => finding.fingerprint === (fingerprint || previous));
+    if (index >= 0) list.appendThrough(index + 1);
+    const row = document.getElementById(rowId(fingerprint || previous));
+    if (row) { row.tabIndex = 0; row.setAttribute('aria-selected', String(!!item)); }
+    if (item) list.rememberPosition();
+    split.classList.toggle('has-selection', !!item);
+    split.querySelector('.detail-pane').replaceWith(detailPane(item, filtered, numbered, choose));
+    if (!item) list.restorePosition();
+    else if (row?.getClientRects().length) row.scrollIntoView({ block: 'nearest' });
+    if (keepListFocus && row?.getClientRects().length) row.focus({ preventScroll: true });
+    else if (item && (window.innerWidth <= 820 || document.activeElement === document.body)) document.getElementById('finding-heading')?.focus({ preventScroll: true });
+  }
 }
 
 function rowId(fingerprint) {
   return `row-${fingerprint.replace(/[^a-z0-9]/gi, '')}`;
 }
 
-function issueList(fresh, filtered, numbered) {
+function roundPicker() {
+  return h('select', { class: 'round-select', 'aria-label': accessText('选择检测轮次', 'Select check round'), onchange: async (event) => {
+    await openRound(event.target.value);
+    document.querySelector('.round-select')?.focus();
+  } }, state.rounds.map((entry) => h('option', { value: entry.id, text: accessText(`第 ${entry.number} 轮 · ${timeText(entry.at)}`, `Round ${entry.number} · ${timeText(entry.at)}`), selected: entry.id === state.round.id })));
+}
+
+function failedPreview(round) {
+  const pages = round.capture?.pages;
+  return pages?.length && pages.every(page => page.status === 'failed') ? pages[0] : null;
+}
+
+function issueList(fresh, filtered, numbered, choose) {
   const round = state.round;
   const titles = [...new Set(fresh.map((violation) => violation.title))];
-  const roundSelect = h('select', { class: 'round-select', 'aria-label': accessText('选择检测轮次', 'Select check round'), onchange: (event) => openRound(event.target.value) },
-    state.rounds.map((entry) => h('option', { value: entry.id, text: accessText(`第 ${entry.number} 轮 · ${timeText(entry.at)}`, `Round ${entry.number} · ${timeText(entry.at)}`), selected: entry.id === round.id })));
+  const advancedCount = [state.domain !== 'all', state.suiteFilter && state.suiteFilter !== 'all', state.issueState !== 'all', state.title !== 'all', state.withShot, state.aiDoubt].filter(Boolean).length;
+  const narrowed = advancedCount > 0 || state.level !== 'all' || !!state.query.trim();
   const doubted = fresh.filter((violation) => violation.ai && violation.ai.verdict === 'not-real').length;
   const review = state.review || { mode: 'off', pending: 0 };
   const reviewBar = !review.pending ? null
     : review.mode === 'api' ? h('div', { class: 'tip' }, h('span', { class: 'grow', text: accessText(`有 ${review.pending} 项截图还没让 AI 看过。AI 会再看一遍，确认问题是不是真的，并找程序漏掉的问题。`, `${review.pending} screenshots are ready for AI review of existing and potentially missed findings.`) }), h('button', { class: 'btn small primary', type: 'button', onclick: startReview }, accessText('AI 看图复核', 'AI image review')))
     : review.mode === 'agent' ? h('div', { class: 'tip' }, h('span', { class: 'grow' }, accessText(`有 ${review.pending} 项截图等你的 AI 助手复核：在 Claude Code、Codex 等里说“用 uxqa 复核截图”。`, `${review.pending} screenshots are ready for review. Ask your connected assistant to review them with UXQA.`)))
     : null;
-  const levelFilters = [['all', accessText(`全部 ${fresh.length}`, `All ${fresh.length}`), null], ...['must', 'default', 'reference'].map((level) => [level, `${LEVEL[level]} ${fresh.filter((violation) => violation.level === level).length}`, level])];
+  const levels = [['all', accessText('全部', 'All'), fresh.length], ...['must', 'default', 'reference'].map((level) => [level, LEVEL[level], fresh.filter((item) => item.level === level).length])];
   const list = h('div', { class: 'issues', role: 'listbox', 'aria-label': accessText('问题列表', 'Issue list'), onkeydown: (event) => {
-    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+    const current = Number(event.target.closest('[data-list-index]')?.dataset.listIndex);
+    if (!Number.isInteger(current)) return;
+    const targets = { ArrowDown: current + 1, ArrowUp: current - 1, Home: 0, End: filtered.length - 1 };
+    if (!Object.hasOwn(targets, event.key)) return;
     event.preventDefault();
-    const index = filtered.findIndex((violation) => violation.fingerprint === state.selected);
-    const next = filtered[Math.max(0, Math.min(filtered.length - 1, index + (event.key === 'ArrowDown' ? 1 : -1)))];
-    if (next) selectIssue(next.fingerprint, true);
+    const index = Math.max(0, Math.min(filtered.length - 1, targets[event.key]));
+    appendThrough(index + 1);
+    if (window.innerWidth > 820) choose(filtered[index].fingerprint, true);
+    else {
+      event.target.tabIndex = -1;
+      const next = list.children[index];
+      next.tabIndex = 0; next.focus();
+    }
   } });
-  for (const violation of filtered.slice(0, state.shown)) {
-    const capture = round.capture && round.capture.captures ? round.capture.captures[violation.fingerprint] : null;
-    const isSelected = violation.fingerprint === state.selected;
-    list.append(h('button', {
-      class: 'issue-row', type: 'button', role: 'option', 'data-button-wrap': 'allow', id: rowId(violation.fingerprint),
-      'aria-selected': isSelected ? 'true' : 'false', tabindex: isSelected || (!state.selected && violation === filtered[0]) ? '0' : '-1',
-      onclick: () => selectIssue(violation.fingerprint, false),
-    },
-      h('span', { class: 'num', text: String(numbered.get(violation.fingerprint)) }),
-      h('span', { class: 'grow' }, h('div', { class: 'row-title ellipsis', title: violation.name, text: violation.name }), h('div', { class: 'row-sub ellipsis', text: `${violation.quality?.domain ? WORKFLOW_DOMAINS[violation.quality.domain] : violation.title} · ${issueStateLabel(state.workflow.dispositions[violation.fingerprint]?.state || 'open')} · ${violation.line ? `${violation.file.split('/').pop()}:${violation.line}` : violation.file}${violation.ai ? ` · ${AI_WORD[violation.ai.verdict]}` : ''}` })),
-      h('span', { class: 'row-end' }, capture && capture.shots && capture.shots.length ? h('span', { title: accessText('有截图', 'Screenshot available') }, icon('image')) : null, h('span', { class: `dot ${violation.level}`, title: LEVEL[violation.level] }))));
+  const more = h('button', { class: 'btn small', type: 'button', onclick: () => {
+    const firstNew = list.childElementCount;
+    appendThrough(firstNew + PAGE_SIZE);
+    const next = list.children[firstNew];
+    if (next) next.focus();
+  } });
+  function appendThrough(target) {
+    const start = list.childElementCount;
+    if (start >= target) return;
+    const end = Math.min(filtered.length, Math.ceil(target / PAGE_SIZE) * PAGE_SIZE);
+    for (let index = start; index < end; index++) {
+      const item = filtered[index], selected = item.fingerprint === state.selected;
+      const hasShot = !!round.capture?.captures?.[item.fingerprint]?.shots?.length;
+      const location = item.line ? item.file.split('/').pop() + ':' + item.line : item.file;
+      const status = state.workflow.dispositions[item.fingerprint]?.state || 'open';
+      const metadata = [item.quality?.domain ? WORKFLOW_DOMAINS[item.quality.domain] : item.title];
+      if (status !== 'open') metadata.push(issueStateLabel(status));
+      if (item.ai) metadata.push(AI_WORD[item.ai.verdict]);
+      list.append(h('button', { class: 'issue-row', type: 'button', role: 'option', id: rowId(item.fingerprint), 'data-list-index': index, 'data-button-wrap': 'allow',
+        'aria-selected': String(selected), 'aria-posinset': index + 1, 'aria-setsize': filtered.length, tabindex: selected || (!state.selected && index === 0) ? '0' : '-1',
+        onclick: () => choose(item.fingerprint) },
+        h('span', { class: 'num', text: String(numbered.get(item.fingerprint)) }),
+        h('span', { class: 'grow' }, h('span', { class: 'row-title', text: item.name }),
+          h('span', { class: 'row-sub' }, h('span', { class: 'row-location', title: item.file, text: location }), h('span', { text: metadata.join(' · ') }))),
+        h('span', { class: 'row-end' }, hasShot ? h('span', { title: accessText('有截图', 'Screenshot available') }, icon('image')) : null,
+          h('span', { class: 'dot ' + item.level, title: LEVEL[item.level] }), h('span', { class: 'sr-only', text: LEVEL[item.level] }))));
+    }
+    state.shown = Math.max(state.shown, end);
+    more.hidden = end >= filtered.length;
+    more.textContent = accessText('加载更多问题', 'Load more findings');
   }
+  appendThrough(state.shown);
+  const expandFilters = h('button', { class: 'btn small issue-filter-toggle', type: 'button', 'aria-expanded': String(!!state.moreFiltersOpen),
+    'aria-controls': 'list-extra-filters', onclick: () => {
+      state.moreFiltersOpen = !state.moreFiltersOpen;
+      expandFilters.setAttribute('aria-expanded', String(state.moreFiltersOpen));
+      advanced.hidden = !state.moreFiltersOpen;
+      if (state.moreFiltersOpen) scroller.scrollTop = 0;
+    } }, accessText('更多筛选', 'More filters'), advancedCount ? ' (' + advancedCount + ')' : '');
+  const advanced = h('div', { class: 'more-filters', id: 'list-extra-filters', hidden: !state.moreFiltersOpen }, issueWorkflowFilters(fresh, titles),
+    h('div', { class: 'filters' },
+      round.screenshots ? h('button', { class: 'filter', id: 'with-screenshot', type: 'button', 'aria-pressed': String(!!state.withShot),
+        onclick: () => { state.withShot = !state.withShot; state.shown = PAGE_SIZE; renderKeepingFocus('#with-screenshot'); } }, icon('image'), accessText(`有截图 ${round.screenshots}`, `With screenshots ${round.screenshots}`)) : null,
+      doubted ? h('button', { class: 'filter', id: 'ai-doubt', type: 'button', 'aria-pressed': String(!!state.aiDoubt),
+        onclick: () => { state.aiDoubt = !state.aiDoubt; state.shown = PAGE_SIZE; renderKeepingFocus('#ai-doubt'); } }, accessText(`AI 认为可能误报 ${doubted}`, `AI: possible false positives ${doubted}`)) : null));
+  const failedPage = failedPreview(round);
+  const httpStatus = failedPage?.error?.match(/(?:返回|HTTP|status)\s*[:：]?\s*([45]\d\d)\b/i)?.[1];
+  const previewNote = failedPage ? h('div', { class: 'issue-preview-alert', role: 'status' },
+    h('span', { class: 'grow' }, accessText('本轮预览失败', 'Preview failed'), httpStatus ? h('span', { class: 'http-status', text: ' · HTTP ' + httpStatus }) : null),
+    antButton(accessText('检查预览地址', 'Check preview URL'), () => { state.focusField = 'base-url'; switchWorkflowTab('settings'); })) :
+    round.partial ? h('div', { class: 'notice warn', role: 'status', text: round.partial }) : null;
+  const context = h('div', { class: 'issue-list-context' }, advanced, previewNote, changedBar(round), reuseBar(round), reviewBar,
+    h('div', { class: 'delta', text: round.number > 1 ? accessText(`较上一轮新增 ${round.appeared} · 未再检出 ${round.resolved}`, `Since last round: ${round.appeared} new · ${round.resolved} no longer detected`)
+      : accessText(`本轮检查了 ${round.filesScanned} 个文件`, `Checked ${round.filesScanned} files`) }),
+    h('div', { class: 'workflow-filter-actions' }, antButton(accessText('记录观察', 'Record observation'), () => openObservation()),
+      antButton(accessText('专项修复方案', 'Focused repair plan'), () => openDiagnosis())));
   const emptyNote = filtered.length ? null : h('p', { class: 'muted list-empty', text: fresh.length ? accessText('没有符合筛选的问题。', 'No issues match the filters.') : accessText('这一轮没有新问题。', 'No new issues in this round.') });
-  const foot = (h('div', { class: 'list-foot row' },
-    filtered.length > state.shown ? h('button', { class: 'btn small', type: 'button', onclick: () => { state.shown += PAGE_SIZE; renderWorkspace(); } }, accessText(`再显示 ${Math.min(PAGE_SIZE, filtered.length - state.shown)} 个`, `Show ${Math.min(PAGE_SIZE, filtered.length - state.shown)} more`)) : null,
-    h('span', { class: 'grow' }),
-    h('button', { class: 'btn small quiet', type: 'button', onclick: openRoundNotes }, icon('info'), accessText('本轮说明', 'Round details'))));
-  const scroller = h('div', { class: 'list-scroll' }, emptyNote, list, foot);
-  return h('div', { class: 'list-pane' },
-    h('div', { class: 'list-head' },
-      h('div', { class: 'row' }, roundSelect),
-      h('div', { class: 'delta' }, round.number > 1
-        ? [accessText('比上一轮：', 'Compared with previous: '), h('span', { class: round.appeared ? 'up' : '', text: accessText(`新出现 ${round.appeared}`, `${round.appeared} new`) }), ' · ', h('span', { class: round.resolved ? 'down' : '', text: accessText(`未再检出 ${round.resolved}`, `${round.resolved} not reported`) })]
-        : accessText(`检查了 ${round.filesScanned} 个文件${round.screenshots ? `，${round.screenshots} 个问题配了截图` : ''}`, `Checked ${round.filesScanned} files${round.screenshots ? `; ${round.screenshots} findings have screenshots` : ''}`)),
-      round.partial ? h('div', { class: 'notice warn', role: 'status', text: round.partial }) : null,
-      changedBar(round),
-      reuseBar(round),
-      reviewBar,
-      issueWorkflowFilters(fresh),
-      fresh.length && localStorage.getItem('uxqa-tip-next') !== 'hidden' ? h('div', { class: 'tip' },
-        h('span', { class: 'grow' }, accessText('下一步：点右上角“复制给 AI”复制修复提示；修改后再检测，确认问题变化。', 'Next, select “Copy for AI” to copy a repair prompt. Run another check after changes to review the results.')),
-        h('button', { class: 'icon-btn', type: 'button', 'aria-label': accessText('不再提示', 'Dismiss tip'), onclick: () => { localStorage.setItem('uxqa-tip-next', 'hidden'); renderWorkspace(); } }, icon('close'))) : null,
-      h('div', { class: 'filters', role: 'group', 'aria-label': accessText('按严重程度筛选', 'Filter by severity') }, levelFilters.map(([value, label, dot]) => h('button', {
-        class: 'filter', type: 'button', 'aria-pressed': state.level === value ? 'true' : 'false',
-        onclick: () => { state.level = value; state.shown = PAGE_SIZE; renderWorkspace(); },
-      }, dot ? h('span', { class: `dot ${dot}` }) : null, label)),
-        round.screenshots ? h('button', { class: 'filter', type: 'button', 'aria-pressed': state.withShot ? 'true' : 'false', onclick: () => { state.withShot = !state.withShot; state.shown = PAGE_SIZE; renderWorkspace(); } }, icon('image'), accessText(`有截图 ${round.screenshots}`, `With screenshots ${round.screenshots}`)) : null,
-        doubted ? h('button', { class: 'filter', type: 'button', 'aria-pressed': state.aiDoubt ? 'true' : 'false', onclick: () => { state.aiDoubt = !state.aiDoubt; state.shown = PAGE_SIZE; renderWorkspace(); } }, accessText(`AI 认为可能误报 ${doubted}`, `AI: possible false positives ${doubted}`)) : null),
-      h('div', { class: 'row' },
-        h('div', { class: 'search grow' }, icon('search'), h('input', { class: 'input', type: 'search', placeholder: accessText('搜问题、文字或文件名', 'Search issues, text, or filenames'), 'aria-label': accessText('搜索问题', 'Search issues'), value: state.query, oninput: (event) => { state.query = event.target.value; state.shown = PAGE_SIZE; renderKeepingFocus('.search input'); } })),
-        h('select', { class: 'input', 'aria-label': accessText('按问题种类筛选', 'Filter by issue type'), onchange: (event) => { state.title = event.target.value; state.shown = PAGE_SIZE; renderWorkspace(); } },
-          h('option', { value: 'all', text: accessText('所有种类', 'All types'), selected: state.title === 'all' }),
-          titles.map((title) => h('option', { value: title, text: title, selected: state.title === title }))))),
-    scroller);
+  const scroller = h('div', { class: 'list-scroll' }, context, emptyNote, list, h('div', { class: 'list-foot' }, more));
+  const positionKey = JSON.stringify([state.current, round.id, state.query, state.level, state.domain, state.suiteFilter, state.issueState, state.title, state.withShot, state.aiDoubt]);
+  function rememberPosition() {
+    if (scroller.clientHeight) state.issueListPosition = { key: positionKey, top: scroller.scrollTop };
+  }
+  scroller.addEventListener('scroll', () => {
+    if (!scroller.clientHeight) return;
+    rememberPosition();
+    if (!more.hidden && scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop < 180) appendThrough(list.childElementCount + PAGE_SIZE);
+  }, { passive: true });
+  const pane = h('div', { class: 'list-pane' }, h('div', { class: 'list-head' },
+    h('div', { class: 'issue-list-round' }, roundPicker(), h('button', { class: 'btn small quiet', type: 'button', onclick: openRoundNotes }, icon('info'), accessText('本轮说明', 'Round details'))),
+    h('div', { class: 'issue-search-line' }, h('div', { class: 'search' }, icon('search'), antControl(antd.Input, {
+      type: 'search', defaultValue: state.query, 'aria-label': accessText('搜索问题', 'Search issues'), placeholder: accessText('搜问题、文字或文件名', 'Search issues, text, or filenames'),
+      onChange: (event) => { if (!event.nativeEvent.isComposing) searchIssues(event.target.value); }, onCompositionEnd: (event) => searchIssues(event.currentTarget.value),
+    })), expandFilters),
+    h('div', { class: 'severity-filters', role: 'group', 'aria-label': accessText('按严重程度筛选', 'Filter by severity') }, levels.map(([value, label, count]) =>
+      h('button', { class: 'filter', type: 'button', id: 'severity-' + value, 'aria-pressed': String(state.level === value),
+        onclick: () => { state.level = value; state.shown = PAGE_SIZE; renderKeepingFocus('#severity-' + value); } }, h('span', { text: label }), h('strong', { text: String(count) })))),
+    narrowed ? h('div', { class: 'filter-summary row' }, h('span', { class: 'grow', role: 'status', text: accessText(`显示 ${filtered.length} / ${fresh.length} 项`, `Showing ${filtered.length} of ${fresh.length}`) }),
+      antButton(accessText('清除筛选', 'Clear filters'), () => { resetFindingFilters(); renderKeepingFocus('.search input'); })) : null), scroller);
+  return { pane, appendThrough, rememberPosition, restorePosition() {
+    if (scroller.clientHeight && state.issueListPosition?.key === positionKey) scroller.scrollTop = state.issueListPosition.top;
+  } };
 }
 
 /** "Pages that look different from the previous round", for checking that a refactor did not change the look. */
@@ -806,34 +915,35 @@ function openChanges() {
   }, { kind: 'drawer', label: accessText('页面和上一轮对比', 'Compare with previous round') });
 }
 
-function renderKeepingFocus(selector) {
-  const active = document.activeElement;
-  const position = active && 'selectionStart' in active ? active.selectionStart : null;
-  renderWorkspace();
-  const next = document.querySelector(selector);
-  if (next) { next.focus(); if (position !== null) next.setSelectionRange(position, position); }
+function searchIssues(query) {
+  if (state.query === query) return;
+  state.query = query;
+  state.shown = PAGE_SIZE;
+  renderKeepingFocus('.search input');
 }
 
-function selectIssue(fingerprint, keepListFocus) {
-  state.selected = fingerprint;
-  state.view = 'crop';
-  const list = document.querySelector('.list-scroll');
-  const scroll = list ? list.scrollTop : 0;
+function renderKeepingFocus(selector) {
+  const active = document.activeElement;
+  const selection = active instanceof HTMLInputElement && active.selectionStart !== null
+    ? [active.selectionStart, active.selectionEnd, active.selectionDirection] : null;
   renderWorkspace();
-  const nextList = document.querySelector('.list-scroll');
-  if (nextList) nextList.scrollTop = scroll;
-  const row = document.getElementById(rowId(fingerprint));
-  if (row) { row.scrollIntoView({ block: 'nearest' }); if (keepListFocus) row.focus(); }
+  const next = document.querySelector(selector);
+  if (next) { next.focus(); if (selection && next instanceof HTMLInputElement) next.setSelectionRange(...selection); }
 }
+
 
 function shotUrl(name) {
   return `/api/projects/${state.current}/shot?round=${encodeURIComponent(state.round.id)}&name=${encodeURIComponent(name)}&t=${encodeURIComponent(token)}`;
 }
 
-function detailPane(violation, filtered, numbered) {
+function detailPane(violation, filtered, numbered, selectIssue) {
   const pane = h('div', { class: 'detail-pane' });
   if (!violation) {
     const any = freshViolations().length;
+    if (any && !filtered.length) {
+      append(pane, emptyState('search', accessText('没有匹配的问题', 'No matching findings'), accessText('调整搜索词，或清除筛选以显示本轮全部问题。', 'Change the search term or clear the filters to show all findings in this round.')));
+      return pane;
+    }
     append(pane, emptyState('check', any ? accessText('选一个问题看看', 'Select a finding') : accessText('这一轮没有新问题', 'No new findings this round'), any ? accessText('左边是这一轮的问题，点一个就能看到截图、原因和改法。', 'Select a finding on the left to see screenshots, context and suggested changes.') : (state.round.baseline ? accessText(`还有 ${state.round.baseline} 个老问题记录在案。`, `${state.round.baseline} existing findings remain in the baseline.`) : accessText('组件都用对了。', 'No new component issues were reported.'))));
     return pane;
   }
@@ -847,18 +957,17 @@ function detailPane(violation, filtered, numbered) {
       data.lines.map((line, offset) => h('div', { class: `line${data.start + offset === violation.line ? ' hit' : ''}` }, h('span', { class: 'ln', text: String(data.start + offset) }), line || ' '))));
   }, (error) => fill(codeBox, h('div', { class: 'notice error', text: error.message })));
 
-  const single = (state.prompts && state.prompts[violation.fingerprint]) || accessText(`${violation.name}\n位置：${violation.file}${violation.line ? ` 第 ${violation.line} 行` : ''}\n要改成：${violation.fix}`, `${violation.name}\nLocation: ${violation.file}${violation.line ? ` line ${violation.line}` : ''}\nSuggested change: ${violation.fix}`);
   append(pane, h('div', { class: 'detail' },
     h('div', { class: 'detail-head' },
-      h('button', { class: 'icon-btn back', type: 'button', 'aria-label': accessText('回到问题列表', 'Back to findings'), onclick: () => { state.selected = null; renderWorkspace(); } }, icon('back')),
+      h('button', { class: 'icon-btn back', type: 'button', 'aria-label': accessText('回到问题列表', 'Back to findings'), onclick: () => selectIssue(null, true) }, icon('back')),
       h('span', { class: 'big-num', 'aria-hidden': 'true', text: String(number) }),
       h('div', { class: 'grow' },
-        h('h2', { text: violation.name }),
+        h('h2', { id: 'finding-heading', tabindex: '-1', text: violation.name }),
         h('div', { class: 'row' }, h('span', { class: `pill ${violation.level}`, text: LEVEL[violation.level] }), h('span', { class: 'chip', text: violation.title }),
           h('span', { class: 'where mono ellipsis', title: violation.file }, icon('file'), violation.line ? `${violation.file}:${violation.line}` : violation.file))),
       h('div', { class: 'detail-actions' },
-        h('button', { class: 'btn small primary', type: 'button', onclick: () => openProjectAgent(violation) }, accessText('讨论并修复', 'Discuss and repair')),
-        h('button', { class: 'btn small', type: 'button', onclick: () => copy(single, accessText('这一条的修复提示', 'repair prompt')) }, icon('copy'), accessText('复制给 AI', 'Copy for AI')))),
+        antButton(accessText('讨论并修复', 'Discuss and repair'), () => openProjectAgent(violation), { id: 'discuss-finding', type: 'primary' }),
+        h('button', { class: 'btn small', type: 'button', onclick: () => copy(findingPrompt(violation), accessText('这一条的修复提示', 'repair prompt')) }, icon('copy'), accessText('复制提示词', 'Copy prompt')))),
     violation.origin === 'manual' ? h('div', { class: 'notice', text: accessText('这条问题来自项目级人工观察。请按记录的操作重现；尚未关联自动截图证据。', 'This is a manual project observation. Reproduce the recorded steps; no automatic screenshot evidence is attached.') }) : stage(number, capture),
     accessText(false, !violation.english && violation.origin !== 'manual') ? h('div', { class: 'notice', text: 'This saved finding is shown in its original language. Run a new check for the latest available English descriptions.' }) : null,
     issueWorkflowDetails(violation),
@@ -915,14 +1024,18 @@ function stage(number, capture) {
   const PLACEHOLDERS = {
     'no-browser': [accessText('这一轮没有截图', 'No screenshots in this round'), accessText('这台电脑还没有浏览器组件，所以这一轮只检查了源码。下载后再检测，这里会显示这个问题在页面上的位置。', 'The browser component is not installed, so only source was checked. Download it and run another check for screenshots.'), [[accessText('下载浏览器组件并重新检测', 'Download browser and recheck'), () => startCheck(), true]]],
     'no-preview': [accessText('还没有页面截图', 'No page screenshot yet'), accessText('设置好本地预览地址后，这里会显示这个问题在页面上的位置。', 'Set a local preview URL to show where this finding appears on the page.'), [[accessText('帮我找预览地址', 'Find preview URL'), () => { state.autoFind = true; goSettings('base-url'); }, true]]],
-    'preview-down': [accessText('预览打不开', 'Preview unavailable'), null, [[accessText('帮我找预览地址', 'Find preview URL'), () => { state.autoFind = true; goSettings('base-url'); }, false], [accessText('重新检测', 'Run check again'), startCheck, true]]],
+    'preview-down': [accessText('预览打不开', 'Preview unavailable'), accessText('请确认预览服务正在运行，核对地址后重新检测即可获取截图。', 'Check that the preview is running, verify its URL, then run the check again to capture screenshots.'), [[accessText('帮我找预览地址', 'Find preview URL'), () => { state.autoFind = true; goSettings('base-url'); }, false], [accessText('重新检测', 'Run check again'), startCheck, true]]],
     'login-required': [accessText('要登录才能看到', 'Sign-in required'), null, [[accessText('提供登录状态文件', 'Provide login state'), () => goSettings('storage'), true]]],
     'file-not-opened': [accessText('这一轮没打开用到它的页面', 'The relevant page was not opened'), null, [[accessText('添加要打开的页面', 'Add pages'), () => goSettings('routes'), true]]],
     hidden: [accessText('页面上没找到这个元素', 'Element not found on the page'), null, []],
     'code-only': [accessText('这个问题只在代码里', 'Source-only finding'), null, []],
     'over-limit': [accessText('这个问题没有参与截图', 'No screenshot for this finding'), accessText('这一轮问题太多，超过了截图上限。修掉一些后再检测，或者用筛选先看有截图的问题。', 'This finding exceeded the screenshot limit for the round. Fix some issues and recheck, or filter for findings with screenshots.'), []],
   };
-  const reason = capture ? (capture.reason || (capture.status === 'not-locatable' ? 'code-only' : 'hidden')) : state.round.capture ? 'over-limit' : state.round.partialCode === 'browser-missing' || (state.round.partial && state.round.partial.includes('还没有浏览器组件')) ? 'no-browser' : 'no-preview';
+  let reason;
+  if (capture) reason = capture.reason || (capture.status === 'not-locatable' ? 'code-only' : 'hidden');
+  else if (failedPreview(state.round)) reason = 'preview-down';
+  else if (state.round.capture) reason = 'over-limit';
+  else reason = state.round.partialCode === 'browser-missing' || state.round.partial?.includes('还没有浏览器组件') ? 'no-browser' : 'no-preview';
   const [title, fallback, actions] = PLACEHOLDERS[reason];
   // Problems that live only in code get a one-line note; the code below is their picture.
   if (reason === 'code-only') return h('div', { class: 'notice', role: 'note' }, h('strong', { text: `${title}：` }), (capture && capture.note) || fallback);
@@ -1418,15 +1531,15 @@ function nativeModelsPanel(saved, save) {
 
 async function renderAiPanel(panel) {
   let data;
-  try { data = await api('/ai'); } catch (error) { fill(panel, h('h2', { text: accessText('AI 看图复核（可选）', 'AI image review (optional)') }), h('div', { class: 'notice error', text: error.message })); return; }
+  try { data = await api('/ai'); } catch (error) { fill(panel, h('div', { class: 'notice error', text: error.message })); return; }
   const saved = data.settings;
   let mode = saved.mode === 'api' && ['native', 'magpie'].includes(saved.connection) ? 'subscription' : saved.mode;
   let saving = false;
   const message = h('div', { role: 'status' });
   const draw = () => {
-    const modeButtons = h('div', { class: 'seg', role: 'group', 'aria-label': accessText('怎么用 AI 看图', 'AI image review mode') },
+    const modeButtons = h('div', { class: 'seg', role: 'group', 'aria-label': accessText('模型连接方式', 'Model connection mode') },
       [['off', '不用', 'Off'], ['api', '直接连接 API', 'Direct API'], ['subscription', '模型与账号', 'Models and accounts'], ['agent', '外部助手（MCP）', 'External assistant (MCP)']].map(([value, label, english]) => h('button', { type: 'button', 'aria-pressed': String(mode === value), onclick: () => { mode = value; draw(); } }, accessText(label, english))));
-    const intro = h('p', { class: 'muted', text: accessText('程序检查之外，再让能看图的大模型看一遍截图：确认每个问题是不是真的（看几遍，结论一致才算），再按规则找程序没查到的问题。不配置也完全能用。', 'Optionally use a vision model to review screenshots, assess detected issues, and suggest additional findings. Ordinary checks work without AI.') });
+    const intro = h('p', { class: 'muted', text: accessText('使用 API 或「模型与账号」选择并保存模型，供项目修复对话使用。支持图片的模型也可以复核截图。', 'Choose Direct API or Models and accounts, select a model, then save it for project repair chats. Vision models can also review screenshots.') });
     let body = null;
     if (mode === 'off') body = h('div', { class: 'row' }, h('span', { class: 'grow faint', text: accessText('现在不用 AI 看图。', 'AI image review is off.') }), saved.mode !== 'off' ? h('button', { class: 'btn primary', type: 'button', onclick: () => save({ mode: 'off' }) }, accessText('保存', 'Save')) : null);
     if (mode === 'agent') {
@@ -1486,7 +1599,7 @@ async function renderAiPanel(panel) {
           } }, accessText('测试连接', 'Test connection')),
           h('button', { class: 'btn primary', type: 'submit' }, accessText('保存', 'Save'))));
     }
-    fill(panel, h('h2', { text: accessText('AI 看图复核（可选）', 'AI image review (optional)') }), intro, modeButtons, body, message);
+    fill(panel, h('h2', { text: accessText('模型连接', 'Model connection') }), intro, modeButtons, body, message);
   };
   const save = async (values) => {
     if (saving) return;
@@ -1563,7 +1676,7 @@ async function removeCurrent() {
   // ?open=add|prompt|notes|changes opens that panel directly, so a link can point at it.
   const panel = wanted.get('open');
   if (panel === 'add') openAddProject();
-  else if (panel === 'prompt' && state.round) openPrompt();
+  else if (panel === 'prompt' && start) { state.repairMode = 'prompt'; switchWorkflowTab('agent'); }
   else if (panel === 'notes' && state.round) openRoundNotes();
   else if (panel === 'reuse' && state.round && state.round.capture && state.round.capture.reuse && state.round.capture.reuse.length) openReuse();
   else if (panel === 'changes' && state.round && state.round.capture && state.round.capture.changes && state.round.capture.changes.length) openChanges();

@@ -1,6 +1,23 @@
 # UXQA user guide
 
+In **Project → Check**, select a specialist category and expand **Task acceptance**. Record a criterion and observations for the current round. Seal the optional model prediction before two people independently rate the case. Usability sessions can also record participant-rated ease. **View calibration metrics** shows missed blockers, reviewer agreement and the share of model passes where participants reported difficulty. [Workflows and metric definitions](assurance-workflows.md#task-acceptance-and-calibration)
+
 UXQA checks frontend projects locally, combining browser evidence with optional AI review. A configured check passing is not acceptance of the entire product.
+
+## Import check sources
+
+Choose a check category in the project’s **Check** tab. Drop files onto **Drop project sources** or choose files from disk. To attach the same file to several checks, open **Add link or repository**, select the categories, then drop the files. Expand **Sources for this check**, choose a passage, review its location and applicable categories, and save it. Importing a revised file creates a new snapshot. Existing clauses retain their original revision.
+
+| Source | How it is used |
+| --- | --- |
+| PDF, DOCX, PPTX, XLSX | Local text extraction retains PDF pages, Word paragraphs, slide paragraphs, and worksheet rows and cell addresses. Image-only PDF pages are recorded as gaps. Convert legacy DOC/XLS/PPT to modern Office format first. |
+| Markdown, TXT, CSV, TSV, JSON, YAML, XML, HTML | Search the extracted text by location. Files may be up to 32 MB, with up to 8 MB of extracted text. |
+| PNG, JPEG, WebP, SVG | Import a single frame and choose **Compare with round capture**. Match content, fonts, theme and dimensions. Missing captures and mismatched sizes are reported. |
+| Sketch, FIG, XD, PSD | Sketch imports artboard names, dimensions and text layers. FIG, XD and PSD record the file name and fingerprint. Attach an exported frame for pixel comparisons. |
+| Git repositories and code files | Supply a GitHub, GitLab or other Git clone URL and an optional branch or tag. Fetching uses local Git credentials and scans the downloaded code. The commit and source positions are recorded. GitHub/GitLab file links and raw text URLs can also be read individually. |
+| Figma, Canva and other boards | Choose a specific Figma node or a Canva.com page. An explicit online export sends the one-time credential to the provider. For Canva China, other boards or offline use, save the link and drop its rendered frame in the same form. A link alone is recorded as awaiting evidence. |
+
+**Offline use and models.** UXQA requires no hosted backend. Local extraction, cached evidence, source scans and pixel comparisons work without a model. For scenario generation or image interpretation, select Ollama, LM Studio or a compatible LAN address in model settings and choose an installed model. Image interpretation requires a vision-capable model. A cloud endpoint receives the selected excerpt and project context. Initial browser/model downloads and remote-source reads require access to their hosts. Saved snapshots remain available offline.
 
 ## Add a project and run a check
 
@@ -9,6 +26,10 @@ Add an existing project folder, inspect the discovered component library and pro
 Version 0.5.0 organizes work as **Project → Check → Issues → Recheck**. UI, UX, and experience findings are classified separately. Automatic checks, AI suggestions, and manual observations have different evidence boundaries. Unvisited pages, untriggered states, and missing screenshots are not passes.
 
 ## General logic checks
+
+In **Check → Check category**, choose a specialist workflow. **Link a source clause** reads project UTF-8 text or accepts an excerpt from another document, PDF or design node. Record its revision, section or page and select all applicable categories. UXQA checks the file digest again when opening its references. Relink changed or missing files. **Prepare scenario with selected model** sends the selected clause and project check context to your configured model. Review actors, actions, assertions and the test URL in the project conversation before selecting **Run test scenario**.
+
+Under **Design fidelity → Compare design frame**, pair a project PNG with an observed page in the current round. Confirm the revision and capture conditions. Inspect dimensions, changed pixels and the difference image locally. **Run page sample** collects accessibility, interaction, compatibility or motion evidence. **Create verification tasks** keeps manual evidence and recheck history. [Workflow methods and scope](assurance-workflows.md#english)
 
 Without a requirements document, ask the project assistant to check two views for a contradiction. The built-in same-fact check reads the object identifier, field identifier, version and displayed value independently on each side. It compares values only when all three identifiers match. Field identifiers must account for units and scope. An unknown snapshot leaves the check unverified. In a scenario, each of `sameFact.object`, `sameFact.field` and `sameFact.version` references a pair of observations.
 
@@ -20,11 +41,25 @@ The CLI accepts the same plans. From the repository root, run `python3 -m http.s
 
 ## Handle and recheck issues
 
+Under **Usability and ease of use → Record task observation**, record an observed task, participant group and device, outcome, difficulty and evidence. Duration is optional. UXQA shows independent completions against the actual sample count for the same round, task and conditions. Retest suggested changes using the same task.
+
+**Check overview** shows the selected round, files checked and new findings. Opening a category clears previous filters. Issue search waits until you finish composing a character with an input method. Use the arrow keys on a project tab to switch tabs, or Home and End to reach the first and last tabs.
+
 Open a finding to review its location, evidence, and repair direction. Record a handling state or add a manual observation. Accepting a deviation or manually confirming a result requires a reason. After a fix, repeat the check with comparable rules, pages, viewport sizes, and states. “Not observed again” alone does not prove a fix.
 
 A focused repair plan combines the selected round's facts, project rules, and built-in knowledge into verification tasks. Record each task's result and evidence, inspect its history, or transfer a finding to a manual observation. A recorded pass is supplied by its author; it does not mean UXQA automatically executed the task. See [quality workflow](quality-workflow.md) for source details.
 
+In **Issues**, the round, search and severity controls stay visible while you scroll. More findings load as you approach the end. Opening a finding and returning keeps your place. Use the up and down arrows to browse and Home or End to reach the first or last finding. If every preview page fails to open, choose **Check preview URL** to edit its address.
+
 ## Project repair chat (0.5.2 and later)
+
+Enter adds a line to your draft. Press ⌘ + Enter on macOS or Ctrl + Enter on Windows and Linux to send, or select **Send**.
+
+**Ask AI to repair** opens **Repair chat → AI repair**. Sending a message calls the model saved in Model settings and keeps its reply in this project. **Copy issue prompts** previews and copies the current finding or the whole round. For rounds with more than 10 findings, you can also copy just the first 10. Copying happens locally and you can return to your chat draft at any time.
+
+Select **Discuss and repair** in a finding to bring it into the project conversation. Use **Back to finding** to revisit its evidence. The issue list shows search and severity first. Open **More filters** to narrow results by handling status or other criteria, or choose **Clear filters** to see the full list again.
+
+In an empty conversation, choose a suggested question to draft a message, edit it, then send. Returning to a finding keeps any search and filters that include it. After the agent edits a file, choose **Recheck edits** to run a new check and see the comparison. Switch rounds in **Recheck** and open a finding directly from **Still detected**. Verify findings marked **No longer detected** under the same page conditions.
 
 Open **Repair chat** within a project, or choose **Discuss and repair** on a finding; both open the same project conversation. Select and save a model in Settings first. Sending shares up to 30 findings from the selected check, the conversation and any project files actually read with that model provider. A finding screenshot or page overview is attached by default when available; you can deselect it. If none is available, UXQA explains how to run a page check.
 

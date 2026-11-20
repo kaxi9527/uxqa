@@ -46,6 +46,7 @@ it('uses integrated quality modules and completes issue handling through the rea
     await page.getByLabel('重现步骤与观察证据').fill('快速切换三次，内容停留在旧页；期望每次及时反馈。');
     await page.getByRole('button', { name: '保存观察', exact: true }).click();
     await page.getByRole('dialog').waitFor({ state: 'hidden' });
+    await page.getByRole('button', { name: '更多筛选', exact: true }).click();
     await page.getByLabel('问题分类', { exact: true }).selectOption('experience');
     await page.getByText('切换时缺少反馈', { exact: true }).first().waitFor();
     await page.getByText('切换时缺少反馈', { exact: true }).first().click();
@@ -108,12 +109,15 @@ it('uses integrated quality modules and completes issue handling through the rea
     await page.keyboard.press('Escape');
     await page.getByRole('tab', { name: '复检', exact: true }).click();
     await page.getByText(/人工标记待复检 1 项/).waitFor();
-    expect(await page.getByText('本轮仍然检出', { exact: true }).count()).toBeGreaterThan(0);
+    expect(await page.locator('.comparison-group[open] summary').innerText()).toContain('仍然检出');
+    await page.getByRole('button', { name: '查看问题', exact: true }).first().click();
+    expect(await page.locator('#finding-heading').isVisible()).toBe(true);
+    await page.getByRole('tab', { name: '复检', exact: true }).click();
     await capture('recheck-desktop');
 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.getByRole('tab', { name: '检查', exact: true }).click();
-    await page.getByRole('heading', { name: '视觉与布局', exact: true }).waitFor();
+    await page.getByLabel('检测类别', { exact: true }).waitFor();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await capture('checks-mobile');
     expect(await page.locator('body').innerText()).not.toMatch(/Impeccable|Kowalski|Pro Max|完整参考库/);
@@ -133,7 +137,7 @@ it('uses integrated quality modules and completes issue handling through the rea
     expect(await page.getByRole('dialog').evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
     await page.keyboard.press('Escape');
     await page.getByLabel('选择检测轮次').selectOption('2026-11-10T00-00-00-000Z');
-    await page.locator('.list-head .delta').filter({ hasText: /检查了/ }).waitFor();
+    await page.locator('.issue-list-context .delta').filter({ hasText: /检查了/ }).waitFor();
     await page.getByRole('button', { name: '专项修复方案', exact: true }).click();
     await page.getByRole('button', { name: /动效与连续操作/ }).click();
     await page.getByText(/此方案与当前查看的轮次不同/).waitFor();

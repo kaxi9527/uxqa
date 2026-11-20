@@ -56,7 +56,14 @@ describe('local console', () => {
     }
     const page = await fetch(`http://127.0.0.1:${consoleServer.port}/`);
     expect(page.status).toBe(200);
-    expect(page.headers.get('content-security-policy')).toContain("default-src 'self'");
+    const policy = page.headers.get('content-security-policy') || '';
+    const nonce = policy.match(/style-src 'self' 'nonce-([^']+)'/)?.[1];
+    expect(nonce).toBeTruthy();
+    expect(policy).toContain("script-src 'self';");
+    expect(policy).not.toContain("'unsafe-inline'");
+    expect(await page.text()).toContain(`nonce="${nonce}"`);
+    const reload = await fetch(`http://127.0.0.1:${consoleServer.port}/`);
+    expect(reload.headers.get('content-security-policy')).not.toBe(policy);
     expect(consoleServer.url).toContain(`#t=${TOKEN}`);
   });
 

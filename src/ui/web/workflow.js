@@ -10,36 +10,55 @@ function renderCheckCenter(body) {
   body.classList.add('quality-page');
   const entry = project(), round = state.round, fresh = freshViolations();
   const modules = [
-    ['ui', accessText('视觉与布局', 'Visual design and layout'), accessText('层级、文字、配色和空间关系', 'Hierarchy, typography, color and spacing'), accessText('检查对比度、换行、遮挡、对齐、卡片密度及宽窄屏布局。', 'Check contrast, wrapping, overlap, alignment, card density, and responsive layouts.')],
-    ['ux', accessText('任务与交互', 'Tasks and interaction'), accessText('能找到、能操作、能恢复', 'Find, act, and recover'), accessText('检查控件命名、表单标签、标题结构与打开状态；任务路径结合实际操作验证。', 'Check control names, form labels, headings, and open states; validate task paths through actual use.')],
-    ['experience', accessText('响应与动效', 'Feedback and motion'), accessText('及时反馈，连续操作不被打断', 'Timely feedback and uninterrupted interaction'), accessText('检查减弱动态偏好、过渡属性与布局动画；流畅度和操作时序需要实际测量。', 'Check reduced-motion preferences, transitions, and layout animation; measure smoothness and timing separately.')],
+    ['ui', accessText('视觉与布局', 'Visual design and layout'), accessText('检查文字对比度、换行、对齐和窄屏布局。', 'Inspect text contrast, wrapping, alignment and narrow layouts.'), accessText('查看 UI 问题', 'View UI issues')],
+    ['ux', accessText('任务与交互', 'Tasks and interaction'), accessText('核对控件名称、表单标签和操作路径。', 'Review control names, form labels and task flows.'), accessText('查看 UX 问题', 'View UX issues')],
+    ['experience', accessText('响应与动效', 'Feedback and motion'), accessText('验证操作反馈、过渡和减弱动态效果。', 'Verify interaction feedback, transitions and reduced motion.'), accessText('查看体验问题', 'View experience issues')],
   ];
+  const review = (domain) => {
+    resetFindingFilters(domain);
+    switchWorkflowTab('issues');
+    document.getElementById('tab-issues').focus();
+  };
   fill(body,
-    h('header', { class: 'quality-heading' }, h('span', { class: 'quality-eyebrow', text: accessText('项目检查', 'Project checks') }), h('h2', { text: accessText('把界面问题变成可验证的改进', 'Turn interface issues into verifiable improvements') }), h('p', { class: 'muted', text: accessText('从项目的组件和规范出发，检查页面、处理问题，再验证修复。', 'Use the project’s components and rules to check pages, address issues, and verify fixes.') })),
+    h('header', { class: 'quality-heading' },
+      h('div', { class: 'grow' }, h('h2', { text: accessText('检查概览', 'Check overview') }),
+        round ? h('div', { class: 'quality-summary' },
+          antControl(antd.Tag, { className: 'round-tag' }, accessText('最近查看：第 ' + round.number + ' 轮', 'Viewing round ' + round.number)),
+          h('span', { text: accessText('已检查 ' + round.filesScanned + ' 个文件 · ' + fresh.length + ' 项本轮新问题', 'Files checked: ' + round.filesScanned + ' · New findings: ' + fresh.length) }))
+          : h('p', { class: 'muted', text: accessText('开始首次检测。设置预览地址后，还可以检查实际页面。', 'Start your first check. Add a preview URL to include the running pages.') })),
+      round ? h('div', { class: 'quality-actions' }, antButton(accessText('处理检查结果', 'Review findings'), () => review('all'), fresh.length ? { type: 'primary' } : {}),
+        antButton(accessText('复检记录', 'Recheck history'), () => switchWorkflowTab('recheck'))) : null),
+    round?.partial ? h('p', { class: 'notice warn', role: 'status', text: round.partial }) : null,
     h('div', { class: 'quality-layout' },
-      h('section', { class: 'quality-main', 'aria-label': accessText('检查能力', 'Check capabilities') }, modules.map(([domain, title, subtitle, description], index) =>
-        h('article', { class: 'quality-module' }, h('span', { class: 'quality-number', 'aria-hidden': 'true', text: '0' + (index + 1) }),
-          h('div', { class: 'grow' }, h('div', { class: 'row' }, h('h3', { class: 'grow', text: title }), h('span', { class: 'faint', text: round ? accessText(fresh.filter((issue) => issue.quality?.domain === domain).length + ' 项待查看', fresh.filter((issue) => issue.quality?.domain === domain).length + ' to review') : accessText('等待检查', 'Awaiting check') })),
-            h('p', { class: 'quality-subtitle', text: subtitle }), h('p', { class: 'muted', text: description }),
-            h('button', { class: 'btn small', type: 'button', disabled: !round, onclick: () => { state.domain = domain; state.issueState = 'all'; switchWorkflowTab('issues'); } }, accessText('查看' + WORKFLOW_DOMAINS[domain].split(' · ')[0] + '问题', 'View ' + WORKFLOW_DOMAINS[domain].split(' · ')[0] + ' issues')))))),
+      h('div', { class: 'assurance-stack' }, assuranceCenter(), h('details', { class: 'quality-main legacy-domains' }, h('summary', { text: accessText('按 UI、UX 与体验查看本轮发现', 'Browse round findings by UI, UX and experience') }), modules.map(([domain, title, description, action]) => {
+        const count = fresh.filter((item) => item.quality?.domain === domain).length;
+        return h('article', { class: 'quality-module' },
+          h('span', { class: 'quality-symbol ' + domain, 'aria-hidden': 'true' }, icon({ ui: 'layout', ux: 'pointer', experience: 'pulse' }[domain])),
+          h('div', { class: 'grow' }, h('h3', { text: title }), h('p', { class: 'muted', text: description })),
+          h('div', { class: 'quality-result' },
+            round ? h('span', { class: count ? 'new-findings-count' : 'faint', text: count ? accessText(count + ' 项新问题', count === 1 ? '1 new finding' : count + ' new findings') : accessText('本轮无新增', 'No new findings') }) : null,
+            antButton(action, () => review(domain), { disabled: !round })));
+      }))),
       h('aside', { class: 'quality-setup', 'aria-label': accessText('检查准备', 'Check setup') }, h('h3', { text: accessText('检查准备', 'Check setup') }),
-        h('div', { class: 'quality-setting' }, h('strong', { text: accessText('组件与规范', 'Components and rules') }), h('p', { class: 'muted', text: state.library ? (state.library.library ? accessText('已发现 ' + state.library.components + ' 个组件', state.library.components + ' components found') : accessText('组件库待确认，通用规则可用', 'Component library not confirmed; general rules are available')) : accessText('正在读取…', 'Loading…') }), h('button', { class: 'btn small', type: 'button', onclick: () => switchWorkflowTab('rules') }, accessText('查看项目规范', 'View project rules'))),
-        h('div', { class: 'quality-setting' }, h('strong', { text: accessText('预览页面', 'Page preview') }), h('p', { class: 'muted where', text: entry.pages?.baseUrl || accessText('添加地址后启用页面检查', 'Add a URL to enable page checks') }), h('button', { class: 'btn small', type: 'button', onclick: () => switchWorkflowTab('settings') }, accessText('设置预览', 'Configure preview'))),
-        h('div', { class: 'quality-setting' }, h('strong', { text: accessText('AI 设计诊断 · 可选', 'AI design review · optional') }), h('p', { class: 'muted', text: accessText('内置评审规则补充截图诊断，建议单独标明。', 'Built-in review guidance supplements screenshot diagnosis.') }), h('button', { class: 'btn small', type: 'button', onclick: openGlobal }, accessText('配置模型', 'Configure model'))))),
-    round ? h('footer', { class: 'quality-footer' }, h('div', { class: 'grow' }, h('strong', { text: accessText('最近查看：第 ' + round.number + ' 轮', 'Viewing round ' + round.number) }), h('p', { class: 'muted', text: round.partial || accessText('检查了 ' + round.filesScanned + ' 个文件。页面、AI 与人工验证的覆盖分别记录。', 'Checked ' + round.filesScanned + ' files. Page, AI, and manual coverage are recorded separately.') })),
-      h('button', { class: 'btn primary', type: 'button', onclick: () => { state.domain = 'all'; switchWorkflowTab('issues'); } }, accessText('处理检查结果', 'Review findings')),
-      h('button', { class: 'btn', type: 'button', onclick: () => switchWorkflowTab('recheck') }, accessText('复检记录', 'Recheck history')))
-      : h('p', { class: 'quality-footnote', text: accessText('点击右上角“开始检测”。未设置预览地址时，先执行源码检查。', 'Select “Start check” above. Without a preview URL, UXQA checks source first.') }));
+        h('div', { class: 'quality-setting' }, h('strong', { text: accessText('组件与规范', 'Components and rules') }),
+          h('p', { class: 'muted', text: state.library ? (state.library.library ? accessText('已发现 ' + state.library.components + ' 个组件', state.library.components + ' components found') : accessText('组件库待确认，通用规则可用', 'Library not confirmed. General rules are available.')) : accessText('正在读取…', 'Loading…') }),
+          antButton(accessText('查看项目规范', 'View project rules'), () => switchWorkflowTab('rules'))),
+        h('div', { class: 'quality-setting' }, h('strong', { text: accessText('预览页面', 'Page preview') }), h('p', { class: 'muted where', text: entry.pages?.baseUrl || accessText('添加地址后启用页面检查', 'Add a URL to enable page checks') }),
+          antButton(accessText('设置预览', 'Configure preview'), () => switchWorkflowTab('settings'))),
+        h('div', { class: 'quality-setting' }, h('strong', { text: accessText('AI 设计诊断 · 可选', 'AI design review · optional') }), h('p', { class: 'muted', text: accessText('连接模型后可复核页面截图。', 'Connect a model to review screenshots.') }),
+          antButton(accessText('配置模型', 'Configure model'), openGlobal)))));
 }
 
-function issueWorkflowFilters(fresh) {
+function issueWorkflowFilters(fresh, titles) {
   return h('div', { class: 'workflow-filters' },
-    h('label', {}, h('span', { class: 'sr-only', text: accessText('问题分类', 'Issue category') }), h('select', { class: 'input', 'aria-label': accessText('问题分类', 'Issue category'), onchange: (event) => { state.domain = event.target.value; state.shown = PAGE_SIZE; renderWorkspace(); } },
+    h('select', { class: 'input', id: 'issue-suite', 'aria-label': accessText('按专项检测筛选','Filter by specialist check'), onchange: e => { state.suiteFilter = e.target.value; state.shown = PAGE_SIZE; renderKeepingFocus('#issue-suite'); } },
+      h('option', { value: 'all', text: accessText('全部专项检测','All specialist checks') }), (state.round.assuranceFamilies || []).map(s => h('option', { value: s.id, selected: state.suiteFilter === s.id, text: s.title }))),
+    h('label', {}, h('span', { class: 'sr-only', text: accessText('问题分类', 'Issue category') }), h('select', { id: 'issue-category', class: 'input', 'aria-label': accessText('问题分类', 'Issue category'), onchange: (event) => { state.domain = event.target.value; state.shown = PAGE_SIZE; renderKeepingFocus('#issue-category'); } },
       h('option', { value: 'all', text: accessText('全部分类', 'All categories'), selected: state.domain === 'all' }), Object.entries(WORKFLOW_DOMAINS).map(([value, label]) => h('option', { value, selected: state.domain === value, text: `${label} · ${fresh.filter((item) => item.quality?.domain === value).length}` })))),
-    h('select', { class: 'input', 'aria-label': accessText('处理状态', 'Handling status'), onchange: (event) => { state.issueState = event.target.value; state.shown = PAGE_SIZE; renderWorkspace(); } }, h('option', { value: 'all', text: accessText('全部处理状态', 'All statuses'), selected: state.issueState === 'all' }), Object.entries(state.issueStates || {}).map(([value, label]) => h('option', { value, selected: state.issueState === value, text: issueStateLabel(value, label) }))),
-    h('div', { class: 'workflow-filter-actions' },
-      h('button', { class: 'btn small', type: 'button', onclick: () => openObservation() }, accessText('记录观察', 'Record observation')),
-      h('button', { class: 'btn small', type: 'button', onclick: () => openDiagnosis() }, accessText('专项修复方案', 'Focused repair plan'))));
+    h('select', { id: 'issue-status', class: 'input', 'aria-label': accessText('处理状态', 'Handling status'), onchange: (event) => { state.issueState = event.target.value; state.shown = PAGE_SIZE; renderKeepingFocus('#issue-status'); } }, h('option', { value: 'all', text: accessText('全部处理状态', 'All statuses'), selected: state.issueState === 'all' }), Object.entries(state.issueStates || {}).map(([value, label]) => h('option', { value, selected: state.issueState === value, text: issueStateLabel(value, label) }))),
+    h('select', { id: 'issue-type', class: 'input', 'aria-label': accessText('按问题种类筛选', 'Filter by issue type'), onchange: (event) => { state.title = event.target.value; state.shown = PAGE_SIZE; renderKeepingFocus('#issue-type'); } },
+      h('option', { value: 'all', text: accessText('所有种类', 'All types'), selected: state.title === 'all' }),
+      titles.map((title) => h('option', { value: title, text: title, selected: state.title === title }))));
 }
 
 async function openDiagnosis(initialView = 'plan') {
@@ -112,6 +131,18 @@ function showDiagnosisPlan(plan, initialView = 'plan') {
         h('label', { class: 'workflow-field' }, accessText('结果', 'Result'), status), h('label', { class: 'workflow-field' }, accessText('过程与证据 / 适用性理由', 'Steps and evidence / applicability'), note), error,
         h('div', { class: 'row verification-actions' }, save, record?.status === 'failed' ? h('button', { class: 'btn small', type: 'button', onclick: () => { close(false); openObservation({ name: accessText(`${task.topic}核对发现问题`, `Issue found: ${task.topic}`), domain: task.domain, detail: accessText(`检查要求：${task.check}\n观察证据：${record.note}\n来源方案：${plan.id}；任务：${task.id}`, `Check: ${task.check}\nEvidence: ${record.note}\nPlan: ${plan.id}; task: ${task.id}`), fix: task.fix }); } }, accessText('转为问题', 'Create finding')) : null));
         append(details, [h('summary', {}, h('span', { class: 'verification-state', text: view.states[record?.status || 'pending'] }), h('span', { text: task.check })), form,
+          plan.knowledgeVersion==='uxqa-assurance-1' && sourceRound?antButton(accessText('为此规程建立盲评案例','Create a blind review case for this procedure'),async e=>{
+            const button=e.currentTarget;button.disabled=true;
+            try{
+              const assurance='/projects/'+projectId+'/assurance',reviews=assurance+'/reviews';
+              const [sources,data]=await Promise.all([api(assurance),api(reviews+'?suite='+encodeURIComponent(plan.focus)+'&round='+encodeURIComponent(plan.roundId))]);
+              if(!panel.isConnected || state.current!==projectId)return;
+              if(state.round?.id!==plan.roundId)await openRound(plan.roundId,false);
+              close(false);state.assuranceSuite=plan.focus;switchWorkflowTab('checks');
+              const suite=sources.suites.find(s=>s.id===plan.focus);
+              editReviewCase(reviews,suite,sourceRound,sources.clauses.filter(c=>c.suites.includes(suite.id)),data,plan.tasks.indexOf(task),null,()=>switchWorkflowTab('checks'));
+            }catch(failure){error.hidden=false;error.textContent=failure.message;button.disabled=false;}
+          }):null,
           history.length ? h('details', { class: 'verification-history' }, h('summary', { text: accessText(`历史记录 · ${history.length}`, `History · ${history.length}`) }), h('ol', {}, [...history].reverse().map((event) => h('li', {}, h('strong', { text: view.states[event.status] }), h('span', { class: 'faint', text: ` · ${timeText(event.at)} · ${event.via === 'mcp' ? accessText('MCP 工具', 'MCP tool') : accessText('界面/API', 'UI/API')}` }), h('p', { text: event.note }))))) : null]);
         group.append(details);
       }
@@ -177,37 +208,57 @@ function openIssueDisposition(violation) {
 
 function openObservation(seed = {}) {
   openOverlay((panel, close) => {
+    const suite = h('select', { class:'input', 'aria-label': accessText('专项检测分类','Specialist check category') }, h('option', { value:'', text:accessText('选择专项检测（可选）','Select specialist check (optional)') }), (state.round.assuranceFamilies || []).map(s => h('option', {value:s.id, selected:s.id === seed.assuranceSuite, text:s.title})));
     const name = h('input', { class: 'input', 'aria-label': accessText('观察问题名称', 'Observation name'), placeholder: accessText('例如：连续切换时抽屉跳回起点', 'For example: drawer resets when switching repeatedly'), value: seed.name || '' });
     const location = h('input', { class: 'input', 'aria-label': accessText('观察位置', 'Location'), placeholder: accessText('页面、控件及触发状态', 'Page, control, and triggering state') });
     const domain = h('select', { class: 'input', 'aria-label': accessText('观察问题分类', 'Observation category') }, Object.entries(WORKFLOW_DOMAINS).map(([value, label]) => h('option', { value, text: label, selected: value === (seed.domain || 'experience') })));
     const detail = h('textarea', { class: 'input', rows: '5', 'aria-label': accessText('重现步骤与观察证据', 'Reproduction steps and evidence'), placeholder: accessText('写明设备、操作步骤、实际与期望结果，以及证据位置；不要填写账号秘密。', 'Describe the device, steps, actual and expected results, and evidence location. Do not include account secrets.') }, seed.detail || '');
     const error = h('p', { class: 'notice error', hidden: true, role: 'alert' });
     append(panel, [h('h2', { text: accessText('记录观察问题', 'Record an observation') }), h('p', { class: 'muted', text: accessText('人工观察单独标明，不会伪装成自动检查通过或失败。记录保存在本项目的本地问题处理中。', 'Manual observations are identified separately from automatic findings and saved locally with this project.') }),
-      h('label', { class: 'workflow-field' }, accessText('名称', 'Name'), name), h('label', { class: 'workflow-field' }, accessText('位置', 'Location'), location), h('label', { class: 'workflow-field' }, accessText('分类', 'Category'), domain), h('label', { class: 'workflow-field' }, accessText('重现步骤与证据', 'Steps and evidence'), detail), error,
+      h('label', { class: 'workflow-field' }, accessText('名称', 'Name'), name), h('label', { class: 'workflow-field' }, accessText('位置', 'Location'), location), h('label', { class: 'workflow-field' }, accessText('分类', 'Category'), domain), suite, h('label', { class: 'workflow-field' }, accessText('重现步骤与证据', 'Steps and evidence'), detail), error,
       h('div', { class: 'row' }, h('button', { class: 'btn', type: 'button', onclick: () => close(false) }, accessText('取消', 'Cancel')), h('button', { class: 'btn primary', type: 'button', onclick: async (event) => {
         event.currentTarget.disabled = true;
-        try { await api(`/projects/${state.current}/observations`, { method: 'POST', body: { name: name.value, location: location.value, domain: domain.value, detail: detail.value, fix: seed.fix || '' } }); close(true); await openRound(state.round.id); toast(accessText('观察问题已记录', 'Observation saved')); }
+        try { await api(`/projects/${state.current}/observations`, { method: 'POST', body: { name: name.value, location: location.value, domain: domain.value, assuranceSuite: suite.value, detail: detail.value, fix: seed.fix || '' } }); close(true); await openRound(state.round.id); toast(accessText('观察问题已记录', 'Observation saved')); }
         catch (failure) { error.hidden = false; error.textContent = failure.message; event.target.disabled = false; }
       } }, accessText('保存观察', 'Save observation')))]);
   }, { label: accessText('记录观察问题', 'Record an observation') });
+}
+
+function comparisonGroups(items) {
+  if (!items.length) return h('p', { class: 'notice', text: accessText('上一轮没有新增问题可供对比。', 'The previous round had no new findings to compare.') });
+  const groups = [
+    ['present', accessText('仍然检出', 'Still detected')],
+    ['not-observed', accessText('未再检出', 'No longer detected')],
+    ['excluded', accessText('已排除', 'Excluded')],
+  ];
+  return h('section', { class: 'comparison-groups', 'aria-label': accessText('与上一轮对比', 'Compared with the previous round') }, groups.map(([status, label]) => {
+    const matches = items.filter((item) => item.status === status);
+    if (!matches.length) return null;
+    return h('details', { class: 'comparison-group', open: status === 'present' },
+      h('summary', {}, h('strong', { text: label }), h('span', { class: 'comparison-count', text: String(matches.length) })),
+      matches.map((item) => h('div', { class: 'comparison-row' }, h('div', { class: 'grow' }, h('strong', { text: item.name }), h('p', { class: 'faint', text: item.file }), status !== 'present' ? h('p', { text: item.explanation }) : null),
+        status === 'present' ? antButton(accessText('查看问题', 'View finding'), () => showFinding(item.fingerprint)) : null)));
+  }));
 }
 
 function renderRecheck(body) {
   body.classList.add('workflow-page');
   if (!state.round) { fill(body, emptyState('check', accessText('还没有可以复检的记录', 'No checks to review yet'), accessText('先完成一次检查，再处理问题并重新检测。', 'Run a check, handle findings, then check again.'), h('button', { class: 'btn', type: 'button', onclick: () => switchWorkflowTab('checks') }, accessText('回到检查', 'Back to checks')))); return; }
   const results = h('div', { class: 'stack' }, h('p', { class: 'muted', text: accessText('正在读取对比…', 'Loading comparison…') }));
-  fill(body, h('div', { class: 'stack' }, h('h2', { text: accessText('复检与验证', 'Recheck and verification') }), h('p', { class: 'muted', text: accessText('“本轮未再检出”只说明当前检查没有再次报告，不自动等于已修复。核对规则、页面、窗口和操作状态；人工观察需要实际重现。', 'A finding not reported in this round is not automatically fixed. Compare the rules, page, viewport and state; reproduce manual observations in person.') }),
-    h('div', { class: 'row verification-actions' }, h('button', { class: 'btn primary', type: 'button', onclick: startCheck }, icon('play'), accessText('重新检测', 'Run check again')), h('button', { class: 'btn', type: 'button', onclick: () => switchWorkflowTab('issues') }, accessText('处理问题', 'Handle findings')),
+  fill(body, h('div', { class: 'stack recheck-page' }, h('header', { class: 'recheck-heading' }, h('h2', { text: accessText('复检与验证', 'Recheck and verification') }), roundPicker()),
+    h('div', { class: 'row verification-actions' }, h('button', { class: 'btn primary', id: 'run-recheck', type: 'button', disabled: state.job?.state === 'running', onclick: startCheck }, icon('play'), accessText('重新检测', 'Run check again')), h('button', { class: 'btn', type: 'button', onclick: () => switchWorkflowTab('issues') }, accessText('处理问题', 'Handle findings')),
       h('button', { class: 'btn', type: 'button', onclick: () => openDiagnosis('verification') }, accessText('专项验证记录', 'Plan verification')),
       state.round.capture?.changes?.length ? h('button', { class: 'btn', type: 'button', onclick: openChanges }, accessText('查看前后截图', 'Compare screenshots')) : null), results));
   api(`/projects/${state.current}/recheck?round=${encodeURIComponent(state.round.id)}`).then(({ comparison, workflow }) => {
     if (!results.isConnected) return;
     const items = comparison?.items || [];
     const pending = Object.entries(workflow.dispositions).filter(([, item]) => item.state === 'recheck');
+    const previous = state.rounds.find((round) => round.id === comparison?.previous);
     fill(results, state.round.partial ? h('div', { class: 'notice warn', text: state.round.partial }) : null,
-      h('p', { text: accessText(`人工标记待复检 ${pending.length} 项 · 项目级观察 ${workflow.observations.length} 项`, `${pending.length} marked for recheck · ${workflow.observations.length} project observations`) }),
+      previous ? h('h3', { class: 'comparison-title', text: accessText(`第 ${previous.number} 轮 → 第 ${state.round.number} 轮`, `Round ${previous.number} → Round ${state.round.number}`) }) : null,
+      pending.length || workflow.observations.length ? h('p', { class: 'faint', text: accessText(`人工标记待复检 ${pending.length} 项 · 项目级观察 ${workflow.observations.length} 项`, `${pending.length} marked for recheck · ${workflow.observations.length} project observations`) }) : null,
       !comparison?.previous ? h('div', { class: 'notice', text: accessText('这是第一轮，尚无上一轮可对比。修复后再运行一次检查。', 'This is the first round; there is no earlier round to compare. Run another check after changes.') })
-        : h('div', { class: 'stack' }, h('h3', { text: accessText(`上一轮的 ${items.length} 项问题`, `${items.length} findings in the previous round`) }), ...items.map((item) => h('div', { class: 'panel' }, h('strong', { text: item.name }), h('p', { class: 'faint', text: item.file }), h('p', { text: item.explanation })))),
+        : comparisonGroups(items),
       workflow.observations.length ? h('section', { class: 'panel' }, h('h3', { text: accessText('人工观察的验证', 'Verify manual observations') }), h('p', { class: 'muted', text: accessText('重新运行截图检查不能自动验证操作时序、动效或手势。请按原步骤操作，在“处理与分类”中记录验证证据。', 'A screenshot check cannot automatically verify timing, motion or gestures. Repeat the original steps and record evidence under Handle and classify.') }), h('button', { class: 'btn', type: 'button', onclick: () => { state.domain = 'all'; state.issueState = 'all'; switchWorkflowTab('issues'); } }, accessText('查看观察记录', 'View observations'))) : null);
   }).catch((error) => { if (results.isConnected) fill(results, h('div', { class: 'notice error', text: error.message }), h('button', { class: 'btn', type: 'button', onclick: () => renderRecheck(body) }, accessText('重试', 'Retry'))); });
 }
