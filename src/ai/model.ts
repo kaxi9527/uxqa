@@ -42,6 +42,7 @@ export const AI_PRESETS: Array<{ id: string; label: string; protocol: AiProtocol
   { id: 'kimi', label: 'Kimi（月之暗面）', protocol: 'openai', baseUrl: 'https://api.moonshot.cn/v1', model: '' },
   { id: 'openrouter', label: 'OpenRouter', protocol: 'openai', baseUrl: 'https://openrouter.ai/api/v1', model: '' },
   { id: 'ollama', label: '本机 Ollama', protocol: 'openai', baseUrl: 'http://localhost:11434/v1', model: '', keyless: true },
+  { id: 'lmstudio', label: 'LM Studio (localhost)', protocol: 'openai', baseUrl: 'http://127.0.0.1:1234/v1', model: '', keyless: true },
   { id: 'custom', label: '其他（OpenAI 兼容接口）', protocol: 'openai', baseUrl: '', model: '' },
 ];
 

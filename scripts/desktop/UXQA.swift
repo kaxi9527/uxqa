@@ -11,7 +11,8 @@ final class Desktop: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUI
     var english = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        let home = ProcessInfo.processInfo.environment["UXQA_HOME"] ?? NSHomeDirectory() + "/.uxqa"
+        let preview = Bundle.main.bundleIdentifier == "local.uxqa.desktop.preview"
+        let home = ProcessInfo.processInfo.environment["UXQA_HOME"] ?? NSHomeDirectory() + (preview ? "/Library/Application Support/UXQA Preview" : "/.uxqa")
         if let data = try? Data(contentsOf: URL(fileURLWithPath: home).appendingPathComponent("access-settings.json")),
            let settings = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
             english = settings["locale"] as? String == "en"
@@ -22,6 +23,7 @@ final class Desktop: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUI
         child.executableURL = resources.appendingPathComponent("runtime/node")
         child.arguments = [resources.appendingPathComponent("app/desktop.mjs").path]
         var env = ProcessInfo.processInfo.environment
+        env["UXQA_HOME"] = home
         env["UXQA_MODEL_CORE"] = resources.appendingPathComponent("model-core/uxqa-model-core").path
         env.removeValue(forKey: "UXQA_UI_TOKEN")
         child.environment = env
@@ -122,6 +124,16 @@ final class Desktop: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUI
         if url.scheme == "http", url.host == "127.0.0.1" { return window(url: url, title: english ? "UXQA · Model connections" : "UXQA · 模型连接中心", configuration: configuration) }
         if ["https", "http"].contains(url.scheme ?? "") { NSWorkspace.shared.open(url) }
         return nil
+    }
+
+    func webView(_ webView: WKWebView, runOpenPanelWith parameters: WKOpenPanelParameters, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping ([URL]?) -> Void) {
+        let picker = NSOpenPanel()
+        picker.allowsMultipleSelection = parameters.allowsMultipleSelection
+        picker.canChooseDirectories = false
+        picker.canChooseFiles = true
+        let done: (NSApplication.ModalResponse) -> Void = { response in completionHandler(response == .OK ? picker.urls : nil) }
+        if let window = webView.window { picker.beginSheetModal(for: window, completionHandler: done) }
+        else { picker.begin(completionHandler: done) }
     }
 
     func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping () -> Void) {

@@ -1,3 +1,17 @@
+## UXQA 0.7.0
+
+Download the archive for your OS and processor from this release’s **Assets**, verify it against `SHA256SUMS.txt`, and extract it. macOS users open `UXQA.app`, Windows users start `Open uxqa console.cmd`, and Linux users run `./open-uxqa-console.sh`. Quit an older copy before upgrading. [English installation guide](install-and-use.en.md) · [中文安装说明](install-and-use.md)
+
+All eight check categories now support task-level acceptance and later-round retests. UXQA records independent human ratings, third-reviewer adjudication, project-level holdouts, evidence-based abstention and a comparison of model passes with participants’ reported task difficulty. Scroll, focus and hover samples support normal and reduced motion. [How to use calibration](assurance-workflows.md#task-acceptance-and-calibration)
+
+Document-based scenarios validate explicit expectations before preparation and execution. Unsupported text, counts, target URLs and comparisons of an observation with itself are rejected.
+
+Project checks now accept multi-file drops, versioned local documents, design images, board exports, Git repositories and individual code links. Offline and online actions are labeled. LM Studio joins the direct local-model presets. [Source formats and network use](product-guide.en.md#import-check-sources)
+
+The check workspace adds eight specialist categories and 24 verification procedures. Link document clauses to multiple categories, verify their revisions, prepare project-specific scenarios, compare a design PNG with an observed page, and keep browser and reviewer evidence. [Run the workflows](product-guide.en.md#general-logic-checks)
+
+In **Issues**, search and severity stay in reach while you scroll. Long lists load the next batch automatically and keep your place when you return from a finding. Arrow keys browse findings, and Home and End jump to either end. When a preview fails, the list links directly to its URL settings.
+
 ## UXQA 0.6.1
 
 Project repair chat and the CLI can compare named observations across actions, views and roles. Rules may come from a project file or the current user's explicit expectation. Check equality, change, numeric boundaries and restored state. Unobserved conditions and missing evidence remain unverified. Existing 0.6.0 list scenarios are supported. [Usage and example](product-guide.en.md#general-logic-checks)

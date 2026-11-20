@@ -4,11 +4,38 @@ function openProjectAgent(finding) {
   const id = state.current;
   if (finding) {
     const prompt = accessText(`请结合本轮检查，分析并修复这个问题：${finding.name}\n位置：${finding.file}${finding.line ? `:${finding.line}` : ''}`, `Analyze and repair this finding from the current check: ${finding.name}\nLocation: ${finding.file}${finding.line ? `:${finding.line}` : ''}`);
-    state.agentDrafts[id] = state.agentDrafts[id] ? `${state.agentDrafts[id]}\n\n${prompt}` : prompt;
+    if (!state.agentDrafts[id]?.trim()) state.agentDrafts[id] = prompt;
+    else if (state.agentFindings[id] !== finding.fingerprint) state.agentDrafts[id] += '\n\n' + prompt;
     state.agentFindings[id] = finding.fingerprint;
   }
   state.tab = 'agent';
+  state.repairMode = 'chat';
   renderWorkspace();
+  document.getElementById('agent-message')?.focus();
+}
+
+function findingPrompt(finding) {
+  return state.prompts?.[finding.fingerprint] || accessText(
+    `${finding.name}\n位置：${finding.file}${finding.line ? ' 第 ' + finding.line + ' 行' : ''}\n要改成：${finding.fix}`,
+    `${finding.name}\nLocation: ${finding.file}${finding.line ? ' line ' + finding.line : ''}\nSuggested change: ${finding.fix}`);
+}
+
+function renderRepairPrompts(finding) {
+  if (!state.round) return emptyState('copy', accessText('还没有检查结果', 'No check results yet'), accessText('运行一次检查后，可以在这里复制问题提示词。', 'Run a check to generate a repair prompt.'),
+    antButton(accessText('开始检测', 'Start check'), () => startCheck(), { type: 'primary' }));
+  const count = freshViolations().length;
+  const scopes = [];
+  if (finding) scopes.push([finding.name, findingPrompt(finding)]);
+  if (count > 10) scopes.push([accessText('优先处理前 10 项', 'First 10 findings'), state.promptFirst]);
+  scopes.push([accessText('全部问题 · 第 ' + state.round.number + ' 轮', 'All findings · Round ' + state.round.number), state.prompt]);
+  const preview = h('pre', { class: 'mono repair-prompt-text', tabindex: '0', 'aria-label': accessText('提示词预览', 'Prompt preview'), text: scopes[0][1] });
+  return h('section', { class: 'repair-prompt-panel' },
+    h('div', { class: 'repair-prompt-tools' },
+      h('label', { class: 'grow', for: 'prompt-scope' }, accessText('问题范围', 'Findings to include'),
+        h('select', { id: 'prompt-scope', class: 'input', onchange: (event) => { preview.textContent = scopes[Number(event.target.value)][1]; } },
+          scopes.map(([label], index) => h('option', { value: index, text: label })))),
+      antButton(accessText('复制提示词', 'Copy prompt'), () => copy(preview.textContent, accessText('提示词', 'prompt')), { type: 'primary' })),
+    preview);
 }
 
 function renderAgentEvidence(item, options = {}) {
@@ -18,6 +45,7 @@ function renderAgentEvidence(item, options = {}) {
     const { plan } = data;
     return h('div', { class: 'agent-evidence' },
       h('strong', { text: plan.name }), h('p', { text: plan.requirement }),
+      data.clause ? h('p', { class: 'muted', text: data.clause.source + ' · ' + data.clause.locator + (data.clause.line ? ' · L' + data.clause.line : '') }) : null,
       h('p', { text: data.basis === 'same-fact' ? accessText('内置逻辑 · 比较同一对象、字段和版本的两次观测', 'Built-in comparison · same object, field and version') : `${data.path || accessText('本次要求', 'Current request')} · ${data.quote}` }),
       h('details', {}, h('summary', { text: accessText('查看角色、操作与断言', 'Review actors, actions and assertions') }), h('pre', { text: JSON.stringify({ journeys: [plan] }, null, 2) })),
       ...plan.gaps.map(text => h('p', { text: accessText('待验证 · ', 'Unverified · ') + text })),
@@ -91,6 +119,21 @@ function renderAgentEvidence(item, options = {}) {
 
 function renderProjectAgent(body) {
   const id = state.current;
+  let selected = state.agentFindings[id];
+  const selectedFinding = state.round?.result?.violations?.find((item) => item.fingerprint === selected);
+  if (selected && !selectedFinding) { delete state.agentFindings[id]; selected = undefined; }
+  const modes = h('div', { class: 'repair-modes', role: 'group', 'aria-label': accessText('修复方式', 'Repair mode') },
+    [['chat', accessText('AI 修复', 'AI repair')], ['prompt', accessText('问题提示词复制', 'Copy issue prompts')]].map(([mode, label]) =>
+      antButton(label, () => {
+        if (state.repairMode === mode) return;
+        state.repairMode = mode;
+        renderKeepingFocus('#repair-mode-' + mode);
+      }, { id: 'repair-mode-' + mode, 'aria-pressed': state.repairMode === mode })));
+  const heading = h('header', { class: 'repair-heading' }, h('h2', { text: accessText('项目修复对话', 'Project repair chat') }), modes);
+  if (state.repairMode === 'prompt') {
+    fill(body, h('div', { class: 'agent-page' }, heading, renderRepairPrompts(selectedFinding)));
+    return;
+  }
   const thread = h('div', { class: 'agent-thread', 'aria-label': accessText('项目修复对话记录', 'Project repair conversation') });
   thread.addEventListener('focusin', (event) => {
     if (event.target.matches(':focus-visible')) event.target.scrollIntoView({ block: 'center', inline: 'nearest' });
@@ -100,23 +143,42 @@ function renderProjectAgent(body) {
   const error = h('div', { role: 'alert' });
   const prompt = h('textarea', { class: 'input agent-input', id: 'agent-message', rows: '3', maxlength: '12000', placeholder: accessText('描述想检查或修复的页面问题…', 'Describe the page issue to inspect or repair…') });
   prompt.value = state.agentDrafts[id] || '';
-  prompt.addEventListener('input', () => { state.agentDrafts[id] = prompt.value; });
-  let selected = state.agentFindings[id];
-  const selectedFinding = state.round?.result?.violations?.find((item) => item.fingerprint === selected);
-  if (selected && !selectedFinding) { delete state.agentFindings[id]; selected = undefined; }
+  const hasFindings = freshViolations().length > 0;
+  const starter = h('button', { class: 'btn small', type: 'button', onclick: () => {
+    prompt.value = hasFindings
+      ? accessText('请按对用户完成任务的影响，给本轮问题排优先级，并说明第一项应如何验证。', 'Prioritize the findings from this round by their impact on user tasks, and explain how to verify the first one.')
+      : accessText('请帮我列出这个项目最值得检查的页面操作，以及每项应当观察的结果。', 'Which page interactions should I check first in this project, and what should I observe for each?');
+    prompt.dispatchEvent(new Event('input')); prompt.focus();
+  } }, hasFindings ? accessText('先处理哪些问题？', 'Which issues should I fix first?') : accessText('先检查哪些操作？', 'What should I check first?'));
+  const recheckEdits = h('button', { class: 'btn small', type: 'button', hidden: true, onclick: () => startCheck({ resultTab: 'recheck' }) }, accessText('复检改动', 'Recheck edits'));
   const capture = state.round?.capture;
   const hasScreenshot = !!(capture?.captures?.[selected]?.shots?.length || capture?.views?.length || capture?.pages?.some((page) => page.screenshot) || (!selected && Object.values(capture?.captures || {}).some((item) => item.shots?.length)));
   const screenshot = h('input', { type: 'checkbox', id: 'agent-screenshot', checked: hasScreenshot, disabled: !hasScreenshot });
   const allowClick = h('input', { type: 'checkbox', id: 'agent-allow-click' });
-  const send = h('button', { class: 'btn primary', type: 'submit' }, accessText('发送', 'Send'));
+  const shortcut = /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘ Enter' : 'Ctrl + Enter';
+  const send = h('button', { class: 'btn primary', type: 'submit', title: shortcut, 'aria-keyshortcuts': 'Meta+Enter Control+Enter' }, accessText('发送', 'Send'));
   const stop = h('button', { class: 'btn', type: 'button', hidden: true }, accessText('停止', 'Stop'));
   const closePreview = h('button', { class: 'btn small', type: 'button', hidden: true, onclick: async () => {
     try { await api(`/projects/${id}/agent/close-preview`, { method: 'POST', body: {} }); await refresh(); }
     catch (failure) { showError(failure.message); }
   } }, accessText('关闭方案预览', 'Close previews'));
   let running = false, syncing = false, previewStarting = false, sending = false, timer;
+  let modelReady = false;
   const showError = (value) => fill(error, value ? h('p', { class: 'notice error', text: value }) : null);
-  const controls = () => { send.disabled = running || syncing || previewStarting || sending; stop.hidden = !running; };
+  const controls = () => {
+    const hasDraft = !!prompt.value.trim();
+    starter.hidden = hasDraft;
+    send.disabled = !modelReady || !hasDraft || running || syncing || previewStarting || sending;
+    stop.hidden = !running;
+  };
+  controls();
+  prompt.addEventListener('input', () => { state.agentDrafts[id] = prompt.value; controls(); });
+  prompt.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' && (event.metaKey || event.ctrlKey) && !event.isComposing && event.keyCode !== 229) {
+      event.preventDefault();
+      if (!send.disabled && !event.repeat) form.requestSubmit(send);
+    }
+  });
   const refresh = async () => {
     if (!body.isConnected) return;
     try {
@@ -125,6 +187,7 @@ function renderProjectAgent(body) {
       running = data.running;
       syncing = data.componentSyncRunning;
       previewStarting = data.codePreviewStarting;
+      recheckEdits.hidden = running || syncing || previewStarting || !data.messages.some((item) => item.backupId && !item.undone);
       closePreview.hidden = !data.previewActive && !previewStarting;
       closePreview.textContent = previewStarting ? accessText('取消打开方案', 'Cancel opening alternatives') : accessText('关闭方案预览', 'Close previews');
       status.textContent = previewStarting ? accessText('正在打开代码方案，可以取消。', 'Opening code alternatives; you can cancel.') : syncing ? accessText('正在运行组件验证与同步，请等待完成。', 'Running component verification and synchronization; please wait.') : running ? accessText('正在处理；修改后会尝试源码复检，你可以离开本页再查看。', 'Working; source is rechecked after edits. You can leave this page and return for the result.') : accessText('以操作记录为准；源码复检不能代替页面截图复检。', 'Check the tool records; a source recheck cannot replace a page screenshot recheck.');
@@ -148,7 +211,7 @@ function renderProjectAgent(body) {
           catch (failure) { showError(failure.message); }
         } }))) : h('div', { class: 'agent-empty' },
         h('strong', { text: accessText('从一个页面问题开始', 'Start with a page issue') }),
-        h('p', { class: 'muted', text: accessText('描述你期望的关系，例如「撤销后恢复原值」，或指定项目中的依据。助手可以核对操作前后和不同页面的实际结果。', 'Describe a relationship such as “undo restores the previous value”, or point to a project requirement. The assistant can compare observations across actions and views.') })));
+        h('p', { class: 'muted', text: accessText('写下你在什么页面做了什么，以及希望看到什么结果。', 'Describe the page, what you did and what you expected to happen.') }), starter));
       if (follow) thread.scrollTop = thread.scrollHeight; else thread.scrollTop = previousTop;
       controls();
       clearTimeout(timer);
@@ -158,7 +221,7 @@ function renderProjectAgent(body) {
   const form = h('form', { class: 'agent-compose', onsubmit: async (event) => {
     event.preventDefault();
     const text = prompt.value.trim();
-    if (!text || running || syncing || previewStarting || sending) return;
+    if (send.disabled) return;
     sending = true; controls(); showError('');
     try {
       await api(`/projects/${id}/agent/messages`, { method: 'POST', body: { text, roundId: state.round?.id, includeScreenshot: screenshot.checked, allowClick: allowClick.checked, ...(selected ? { fingerprint: selected } : {}) } });
@@ -177,16 +240,19 @@ function renderProjectAgent(body) {
     catch (failure) { showError(failure.message); }
   });
   fill(body, h('div', { class: 'agent-page' },
-    h('div', { class: 'agent-heading' }, h('div', {}, h('h2', { text: accessText('项目修复对话', 'Project repair chat') }), h('p', { class: 'muted', text: accessText('围绕当前项目的 UI、UX 与体验问题沟通、修改、复检。', 'Discuss, edit and recheck this project’s UI, UX and experience issues.') })),
-      h('div', { class: 'row' }, closePreview, h('button', { class: 'btn small', type: 'button', onclick: openGlobal }, accessText('模型设置', 'Model settings')))),
-    modelStatus,
-    selectedFinding ? h('div', { class: 'agent-selected' }, h('span', { text: `${accessText('当前问题', 'Current finding')}：${selectedFinding.name}` }), h('button', { class: 'btn small quiet', type: 'button', onclick: () => { delete state.agentFindings[id]; renderWorkspace(); } }, accessText('清除', 'Clear'))) : null,
+    heading,
+    h('div', { class: 'repair-model-row' }, modelStatus, antButton(accessText('模型设置', 'Model settings'), () => openGlobal('repair')), closePreview),
+    selectedFinding ? h('div', { class: 'agent-selected' }, h('strong', { class: 'grow', text: accessText('当前问题 · ', 'Current finding · ') + selectedFinding.name }),
+      selectedFinding.status === 'new' ? antButton(accessText('查看原问题', 'Back to finding'), () => showFinding(selectedFinding.fingerprint)) : null,
+      h('button', { class: 'btn small quiet', type: 'button', 'aria-label': accessText('解除当前问题关联', 'Remove finding from chat context'), onclick: () => { delete state.agentFindings[id]; renderWorkspace(); } }, accessText('清除', 'Clear'))) : null,
     h('p', { class: 'agent-disclosure', text: accessText('可修改项目文本并保留本地备份。发送时会与所选模型共享问题、对话及读取的文件和预览资源；有截图时默认附带，可取消。', 'Project text can be edited with local backups. Sending shares findings, conversation, files and preview resources read with the selected model. Screenshots are attached by default when available and can be deselected.') }),
-    error, thread, status, form));
+    error, thread, h('div', { class: 'agent-run-status' }, status, recheckEdits), form));
   void refresh();
   api('/ai').then(({ settings }) => {
     if (!body.isConnected) return;
     const requestLimit = Math.max(1, Math.min(24, Math.trunc(Number(settings.maxCalls)) || 1));
-    modelStatus.textContent = settings.mode === 'api' && settings.model ? accessText(`已配置模型：${settings.model} · 每条消息最多 ${requestLimit} 次请求`, `Configured model: ${settings.model} · Up to ${requestLimit} requests per message`) : accessText('尚未配置可用模型，请先打开模型设置。', 'No model is configured. Open model settings first.');
+    modelReady = settings.mode === 'api' && !!settings.model;
+    modelStatus.textContent = modelReady ? accessText(`已配置模型：${settings.model} · 每条消息最多 ${requestLimit} 次请求`, `Configured model: ${settings.model} · Up to ${requestLimit} requests per message`) : accessText('先在「模型设置」连接并选择模型，即可发送。草稿会保留。', 'Connect and select a model in Model settings to send. Your draft will be kept.');
+    controls();
   }).catch(() => { if (body.isConnected) modelStatus.textContent = accessText('无法读取模型设置，请打开设置检查。', 'Could not read model settings. Open Settings to check.'); });
 }

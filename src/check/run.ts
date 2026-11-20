@@ -22,6 +22,7 @@ export interface Violation extends PlainMessage {
   english?: PlainMessage;
   /** Primary issue domain; old reports derive this from their rule without rewriting history. */
   domain?: IssueDomain;
+  assuranceSuite?: string;
   rule: string;
   level: Exclude<RuleLevel, 'off'>;
   /** 'ai' marks a problem found by looking at screenshots (vision model or the user's agent), not by a rule program. */

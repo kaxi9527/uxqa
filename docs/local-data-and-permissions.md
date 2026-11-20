@@ -2,6 +2,8 @@
 
 首次下载请先看 [安装与使用说明](install-and-use.md)，按你的系统完成解压、首次启动和第一次检测。
 
+逐项资料的联网、凭据与快照说明见[中文指南](product-guide.zh-CN.md#导入检查依据)。Read the [English source guide](product-guide.en.md#import-check-sources) for network destinations, credentials and local snapshots.
+
 ## 中文速读
 
 - **怎么运行**：Mac 打开 `UXQA.app`；Windows 解压后双击 `Open uxqa console.cmd`；Linux 运行 `./open-uxqa-console.sh`。安装包自带 Node 和 UXQA 模型模块。Windows/Linux 使用浏览器显示本机界面，终端要保持打开。

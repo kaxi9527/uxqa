@@ -177,6 +177,7 @@ export async function runAudit(config: HarnessConfig, options: RunOptions): Prom
                     });
                   }
                   addCheck({ check: 'axe', dimension: 'accessibility', status: blocking ? 'fail' : 'pass', detail: `axe ${axeResults.testEngine.version} tags ${tags.join(',')}: ${blocking} conformance violation(s), ${advisory} advisory; automated scan only`, ...where });
+                  for (const rule of axeResults.incomplete) addCheck({ check: 'axe-manual-review', dimension: 'accessibility', status: 'not-verified', detail: rule.id + ' · ' + rule.help, evidence: rule.nodes.flatMap(node => node.target.map(String)), ...where });
                 } catch (error) {
                   addCheck({ check: 'axe', dimension: 'accessibility', status: 'blocked', detail: `axe could not run: ${errorMessage(error)}`, ...where });
                 }
@@ -292,7 +293,8 @@ export async function runAudit(config: HarnessConfig, options: RunOptions): Prom
         const context = await newContext({ width: reflow.width, height: reflow.height });
         try {
           const page = await context.newPage();
-          await page.goto(absoluteUrl(config.baseUrl, route), { waitUntil: 'load', timeout: 20_000 });
+          const response = await page.goto(absoluteUrl(config.baseUrl, route), { waitUntil: 'load', timeout: 20_000 });
+          if (!response?.ok()) { addCheck({ check: reflow.check, dimension: 'responsive', status: 'blocked', detail: 'Could not measure target page: HTTP ' + (response?.status() ?? 'unavailable'), ...where }); continue; }
           await page.waitForTimeout(150);
           const result = await measureReflow(page, config.options.reflowExceptions);
           const label = `${safeName(route)}-${reflow.check}`;
@@ -314,7 +316,8 @@ export async function runAudit(config: HarnessConfig, options: RunOptions): Prom
       const context = await newContext({ width: motionViewport.width, height: motionViewport.height }, { reducedMotion: 'reduce' });
       try {
         const page = await context.newPage();
-        await page.goto(absoluteUrl(config.baseUrl, route), { waitUntil: 'load', timeout: 20_000 });
+        const response = await page.goto(absoluteUrl(config.baseUrl, route), { waitUntil: 'load', timeout: 20_000 });
+        if (!response?.ok()) { addCheck({ check: 'reduced-motion', dimension: 'accessibility', status: 'blocked', detail: 'Could not measure target page: HTTP ' + (response?.status() ?? 'unavailable'), ...motionWhere }); continue; }
         await page.waitForTimeout(500);
         const motion = await measureMotion(page);
         const moving = motion.persistent.length + motion.autoplayVideos;

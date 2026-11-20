@@ -1,5 +1,5 @@
 import { readFile, writeFile } from 'node:fs/promises';
-import { chromium } from 'playwright';
+import { chromium, type Page } from 'playwright';
 import type { PageView } from './audit.js';
 
 /**
@@ -24,8 +24,19 @@ const COMPARE_SCRIPT = `async ([before, after]) => {
   }
   const canvas = document.createElement('canvas'); canvas.width = width; canvas.height = height;
   canvas.getContext('2d').putImageData(out, 0, 0);
-  return { percent: changed / (width * height) * 100, diff: changed ? canvas.toDataURL('image/png') : '' };
+  return { changed, percent: changed / (width * height) * 100, diff: changed ? canvas.toDataURL('image/png') : '' };
 }`;
+
+async function compareOnPage(page: Page, first: Buffer, second: Buffer) {
+  const urls = [first, second].map(data => 'data:image/png;base64,' + data.toString('base64'));
+  return page.evaluate('(' + COMPARE_SCRIPT + ')(' + JSON.stringify(urls) + ')') as Promise<{ changed: number; percent: number; diff: string }>;
+}
+
+export async function comparePngs(first: Buffer, second: Buffer) {
+  const browser = await chromium.launch();
+  try { return await compareOnPage(await browser.newPage(), first, second); }
+  finally { await browser.close(); }
+}
 
 export async function compareViews(previous: { round: string; views: PageView[] } | undefined, current: PageView[], diffPath: (view: PageView) => string): Promise<ViewChange[]> {
   if (!previous || !current.length) return [];
@@ -39,8 +50,7 @@ export async function compareViews(previous: { round: string; views: PageView[] 
     for (const { view, old } of pairs) {
       const [a, b] = await Promise.all([readFile(old.image).catch(() => undefined), readFile(view.image).catch(() => undefined)]);
       if (!a || !b) continue;
-      const url = (data: Buffer) => `data:image/png;base64,${data.toString('base64')}`;
-      const result = await page.evaluate(`(${COMPARE_SCRIPT})(${JSON.stringify([url(a), url(b)])})`) as { percent: number; diff: string };
+      const result = await compareOnPage(page, a, b);
       let diff: string | undefined;
       if (result.diff) { diff = diffPath(view); await writeFile(diff, Buffer.from(result.diff.split(',')[1], 'base64')); }
       changes.push({ route: view.route, width: view.width, previousRound: previous.round, previousImage: old.image, image: view.image, ...(diff ? { diff } : {}), percent: Math.round(result.percent * 100) / 100 });

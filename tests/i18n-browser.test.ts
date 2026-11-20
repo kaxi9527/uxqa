@@ -30,6 +30,20 @@ it('renders product-owned review and settings surfaces in English for an English
       if (tab === 'Project rules') await page.getByText('Loading project rules…').waitFor({ state: 'hidden' });
       expect.soft(await page.locator('#workspace').innerText(), `${tab} should not expose untranslated product text`).not.toMatch(/[\u4e00-\u9fff]/);
       if (tab === 'Issues') {
+        const search = page.getByRole('searchbox', { name: 'Search issues' });
+        await search.fill('no-matching-finding');
+        expect(await search.evaluate((field) => field === document.activeElement)).toBe(true);
+        await search.fill('');
+        await search.evaluate((field) => {
+          const input = field as HTMLInputElement;
+          input.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+          Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, '拼');
+          input.dispatchEvent(new InputEvent('input', { bubbles: true, isComposing: true, data: '拼' }));
+          if (!input.isConnected) throw new Error('Search was replaced during composition');
+          input.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: '拼' }));
+        });
+        expect(await search.inputValue()).toBe('拼');
+        await search.fill('');
         const findings = page.locator('.issues [role="option"]');
         expect(await findings.count()).toBeGreaterThan(1);
         for (let index = 0; index < await findings.count(); index++) {
@@ -37,10 +51,12 @@ it('renders product-owned review and settings surfaces in English for an English
           await page.waitForLoadState('networkidle');
           expect.soft(await page.locator('#workspace').innerText(), `Finding ${index + 1} should be rendered in English`).not.toMatch(/[\u4e00-\u9fff]/);
         }
-        await page.getByRole('button', { name: 'Copy for AI', exact: true }).first().click();
-        await page.getByRole('heading', { name: 'Repair prompt for AI' }).waitFor();
-        expect.soft(await page.locator('.drawer').innerText(), 'Repair prompt should be rendered in English').not.toMatch(/[\u4e00-\u9fff]/);
-        await page.keyboard.press('Escape');
+        await page.getByRole('button', { name: 'Ask AI to repair', exact: true }).click();
+        await page.getByRole('button', { name: 'Copy issue prompts', exact: true }).click();
+        const preview = page.getByLabel('Prompt preview');
+        expect.soft(await preview.innerText(), 'Repair prompt should be rendered in English').not.toMatch(/[\u4e00-\u9fff]/);
+        await page.getByLabel('Findings to include').selectOption({ index: 1 });
+        expect((await preview.innerText()).length).toBeGreaterThan(0);
       }
       if (tab === 'Project rules') {
         await page.getByText('Advanced: write project rules', { exact: true }).click();

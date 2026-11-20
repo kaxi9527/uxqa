@@ -1,6 +1,12 @@
 # Install, use, and update UXQA
 
-UXQA is distributed directly through GitHub Releases; no app store or UXQA account is required. The bundles include their own runtime and model module. Download the archive for your operating system and processor, and keep all extracted files together. This guide describes v0.6.1; earlier downloads may have different features. Check Releases for the versions actually available.
+After installing, run a project check, choose a specialist category and open **Task acceptance**. Manual acceptance works locally. Configure a model to compare its judgment with the reviewers’ results.
+
+**Local macOS preview.** For a `UXQA-Preview-…-macOS-arm64.zip` archive, unzip it and open `UXQA Preview.app`. It can run alongside the installed edition. The preview keeps its own projects, access records and model settings in `~/Library/Application Support/UXQA Preview`. Choose a language and add the project you want to check on first launch.
+
+UXQA is distributed directly through GitHub Releases; no app store or UXQA account is required. The bundles include their own runtime and model module. Download the archive for your operating system and processor, and keep all extracted files together. This guide describes v0.7.0; earlier downloads may have different features. Check Releases for the versions actually available.
+
+Local source import is built in. Supply your own model on this computer or LAN if needed. Remote repository scans require Git. Prepare the browser runtime, model and design exports before going offline. [Import check sources](product-guide.en.md#import-check-sources)
 
 ## Download and verify
 
@@ -10,14 +16,14 @@ Download `SHA256SUMS.txt` from the same release. In the download folder, compute
 
 ```sh
 # macOS
-shasum -a 256 UXQA-0.6.1-macOS-arm64.zip
+shasum -a 256 UXQA-0.7.0-macOS-arm64.zip
 # Linux
-sha256sum uxqa-0.6.1-linux-x64.tar.gz
+sha256sum uxqa-0.7.0-linux-x64.tar.gz
 ```
 
 ```powershell
 # Windows PowerShell
-Get-FileHash .\uxqa-0.6.1-win-x64.zip -Algorithm SHA256
+Get-FileHash .\uxqa-0.7.0-win-x64.zip -Algorithm SHA256
 ```
 
 Substitute the actual archive name where necessary.

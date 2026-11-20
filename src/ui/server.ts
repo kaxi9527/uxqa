@@ -31,7 +31,12 @@ import { localizedGuide } from '../guidance/guides.en.js';
 import { DIAGNOSIS_FOCUSES, DIAGNOSTIC_CASES, KNOWLEDGE_VERSION } from '../guidance/diagnostics.js';
 import { ENGLISH_FOCUS_TITLES } from '../guidance/diagnostics.en.js';
 import { STACK_KNOWLEDGE } from '../guidance/context.js';
-import { createDiagnosis, listDiagnoses } from './diagnosis.js';
+import { createAssurancePlan, createDiagnosis, listDiagnoses } from './diagnosis.js';
+import { assuranceCatalog } from '../guidance/assurance.js';
+import { calibrationMetrics, createReviewCase, reviewWorkspace, updateReviewCase } from './calibration.js';
+import { listEvidence, importEvidence, inspectRemoteCode, readCodeLink } from './evidence.js';
+import { exportBoard } from './board-export.js';
+import { addClause, addUsabilitySession, compareDesign, currentClauses, designImage, inspectDocument, isSampling, readRecords, removeClause, samplePage } from './assurance.js';
 import { getDiagnosisVerification, recordDiagnosisVerification, VerificationError } from './diagnosis-verification.js';
 import { forgetAccessCheck, readAccessSettings, recordAccessCheck, recheckPreviouslyAccessible, updateAccessSettings } from './access.js';
 import { availableRoundScreenshots, cleanExpiredScreenshots, expiredScreenshotNames } from './screenshot-retention.js';
@@ -52,20 +57,20 @@ function issueDomain(value: unknown): IssueDomain | undefined {
   throw new HttpError(400, '问题分类只能是 UI、UX 或体验');
 }
 
-async function body(request: IncomingMessage): Promise<Record<string, unknown>> {
+async function body(request: IncomingMessage, limit=1_000_000): Promise<Record<string, unknown>> {
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const chunk of request) {
     size += (chunk as Buffer).length;
-    if (size > 1_000_000) throw new HttpError(413, '请求内容太大');
+    if (size > limit) throw new HttpError(413, '资料超过导入大小限制。 / Source exceeds the import size limit.');
     chunks.push(chunk as Buffer);
   }
   if (!chunks.length) return {};
   try { return JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch { throw new HttpError(400, '请求内容不是有效的 JSON'); }
 }
 
-async function accessBody(request: IncomingMessage): Promise<Record<string, unknown>> {
-  const input = await body(request);
+async function accessBody(request: IncomingMessage, limit?:number): Promise<Record<string, unknown>> {
+  const input = await body(request,limit);
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new HttpError(400, '请求内容必须是对象');
   return input;
 }
@@ -287,6 +292,7 @@ function clientRound(round: Round, locale: 'zh' | 'en' | null) {
   }
   return {
     ...round,
+    assuranceFamilies: assuranceCatalog(locale).map(({id,title}) => ({id,title})),
     ...(round.partial === MISSING_SENTENCE ? { partialCode: 'browser-missing' } : {}),
     ...(locale === 'en' && round.partial === MISSING_SENTENCE ? { partial: 'No screenshots this round: the browser component is not installed. Source checks completed; start another check and confirm the download, or run uxqa browser install.' } : {}),
     result: { ...round.result, violations: round.result.violations.map((violation) => {
@@ -439,6 +445,71 @@ async function route(request: IncomingMessage, response: ServerResponse, path: s
   const entry = await project(parts[1]);
   const action = parts[2];
 
+  if (action === 'assurance') {
+    if(parts[3]==='reviews'){
+      const locale=(await readAccessSettings()).locale;
+      if(method==='GET' && parts.length===5 && parts[4]==='metrics')return send(response,200,{groups:await calibrationMetrics()});
+      if(method==='GET' && parts.length===4){
+        const query=new URL(request.url ?? '/', 'http://localhost').searchParams;
+        const round=await getRound(entry.id,query.get('round') ?? '');
+        if(!round)throw new HttpError(404,'请选择本项目的检查轮次 / Select a project round');
+        return send(response,200,await reviewWorkspace(entry,round,query.get('suite') ?? '',locale));
+      }
+      if(method==='POST'){
+        const input=await accessBody(request);
+        if(parts.length===6)return send(response,200,await updateReviewCase(entry,parts[4],parts[5],input,locale));
+        if(parts.length===4){
+          const round=await getRound(entry.id,String(input.roundId ?? ''));
+          if(!round)throw new HttpError(404,'请选择本项目的检查轮次 / Select a project round');
+          return send(response,201,await createReviewCase(entry,round,input,locale));
+        }
+      }
+      throw new HttpError(404,'无效的校准操作 / Unknown calibration action');
+    }
+    if (method === 'GET' && parts[3] === 'reference-image' && parts.length === 5) {
+      const image = await designImage(entry,parts[4]);
+      response.writeHead(200, { 'content-type':'image/png', 'cache-control':'no-store', 'x-content-type-options':'nosniff' }); response.end(image); return;
+    }
+    if (method === 'DELETE' && parts[3] === 'clauses' && parts.length === 5) {
+      await removeClause(entry, parts[4]);
+      return send(response, 200, { removed: true });
+    }
+    if (method === 'GET' && parts.length === 3) {
+      const locale = (await readAccessSettings()).locale;
+      return send(response, 200, { suites: assuranceCatalog(locale), sources:await listEvidence(entry), clauses: await currentClauses(entry), comparisons: await readRecords(entry, 'comparisons'), samples: await readRecords(entry, 'samples'), sessions: await readRecords(entry, 'sessions'), sampling: isSampling(entry) });
+    }
+    if (method === 'POST' && parts.length === 4) {
+      const input = await accessBody(request,parts[3]==='import' ? 44_000_000 : undefined);
+      if (parts[3] === 'import') return send(response,201,await importEvidence(entry,input));
+      if (parts[3] === 'repository') return send(response,201,await inspectRemoteCode(entry,input));
+      if (parts[3] === 'code-link') return send(response,201,await readCodeLink(entry,input));
+      if (parts[3] === 'board-export') return send(response,201,await exportBoard(entry,input));
+      if (parts[3] === 'document') return send(response, 200, await inspectDocument(entry, input));
+      if (parts[3] === 'clauses') return send(response, 201, await addClause(entry, input));
+      const round = typeof input.roundId === 'string' ? await getRound(entry.id, input.roundId) : undefined;
+      if (!round) throw new HttpError(404, '请先选择一轮检查。 / Select a check round first.');
+      if (parts[3] === 'sample') return send(response, 200, await samplePage(entry, round, input));
+      if (parts[3] === 'session') return send(response, 201, await addUsabilitySession(entry, round, input));
+      if (parts[3] === 'compare') return send(response, 200, await compareDesign(entry, round, input));
+      if (parts[3] === 'scenario') {
+        const locale = (await readAccessSettings()).locale;
+        const suite = assuranceCatalog(locale).find(item => item.id === input.suite);
+        const clause = (await currentClauses(entry)).find(item => item.id === input.clauseId && item.suites.includes(String(input.suite)));
+        if (!suite || !clause || clause.status === 'stale' || clause.purpose==='observation') throw new HttpError(409, '请核对当前条款。 / Review the current source clause first.');
+        const text = [suite.title, clause.source + ' · ' + clause.locator, clause.quote, suite.boundary,
+          ...suite.checks.map(([title, method, decision]) => title + ' — ' + method + ' ' + decision),
+          locale === 'en' ? 'Prepare a runnable scenario only for the quoted expectation. Show missing prerequisites, observations and assertions before execution.' : '请仅为原文支持的期望准备可运行场景，列出缺失条件、观测与断言，等待确认执行。'].join('\n\n');
+        await startProjectAgent(entry, { text, roundId: round.id, includeScreenshot: false }, clause);
+        return send(response, 202, { accepted: true });
+      }
+      if (parts[3] === 'plan') {
+        const plan = await createAssurancePlan(entry, round, String(input.suite));
+        if (!plan) throw new HttpError(400, '无效检测类别。 / Unknown check category.');
+        return send(response, 201, { plan });
+      }
+    }
+  }
+
   if (action === 'agent') {
     if (method === 'GET' && parts.length === 3) return send(response, 200, await getProjectAgent(entry.id));
     if (method === 'POST' && parts[3] === 'messages' && parts.length === 4) { await startProjectAgent(entry, await accessBody(request)); return send(response, 202, { accepted: true }); }
@@ -488,7 +559,8 @@ async function route(request: IncomingMessage, response: ServerResponse, path: s
     const detail = typeof input.detail === 'string' ? input.detail.trim().slice(0, 2000) : '';
     const location = typeof input.location === 'string' ? input.location.trim().slice(0, 300) : '';
     if (!name || !detail || !location) throw new HttpError(400, '请填写问题名称、位置，以及可重现的操作与观察证据');
-    return send(response, 200, { workflow: await addObservation(entry.id, { name, detail, location, domain: issueDomain(input.domain) ?? 'experience', fix: typeof input.fix === 'string' ? input.fix.slice(0, 500) : '' }) });
+    const suite = assuranceCatalog(null).find(s => s.id === input.assuranceSuite);
+    return send(response, 200, { workflow: await addObservation(entry.id, { name, detail, location, domain: issueDomain(input.domain) ?? 'experience', assuranceSuite: suite?.id, fix: typeof input.fix === 'string' ? input.fix.slice(0, 500) : '' }) });
   }
   if (method === 'GET' && action === 'recheck') {
     const rounds = await listRounds(entry.id);
@@ -498,7 +570,8 @@ async function route(request: IncomingMessage, response: ServerResponse, path: s
     const current = await getRound(entry.id, rounds[index].id);
     const previous = rounds[index + 1] ? await getRound(entry.id, rounds[index + 1].id) : undefined;
     if (!current) throw new HttpError(404, '找不到这一轮检测');
-    return send(response, 200, { comparison: recheckComparison(previous, current), workflow: await readIssueWorkflow(entry.id) });
+    const { locale } = await readAccessSettings();
+    return send(response, 200, { comparison: recheckComparison(previous, current, locale), workflow: await readIssueWorkflow(entry.id) });
   }
 
   if (method === 'DELETE' && !action) { await removeProject(entry.id); return send(response, 200, { removed: true }); }
@@ -711,11 +784,13 @@ export async function startConsole(options: { port?: number; host?: string } = {
       }
       const asset = ASSETS[url.pathname === '/' ? '/index.html' : url.pathname];
       if (!asset) { response.writeHead(404); response.end(); return; }
+      const styleNonce = asset.type.startsWith('text/html') ? randomBytes(18).toString('base64') : null;
       response.writeHead(200, {
         'content-type': asset.type, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff',
-        'content-security-policy': "default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'",
+        'content-security-policy': `default-src 'self'; style-src 'self'${styleNonce ? " 'nonce-" + styleNonce + "'" : ''}; script-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'`,
       });
-      response.end(asset.encoding === 'base64' ? Buffer.from(asset.body, 'base64') : asset.body);
+      response.end(styleNonce ? asset.body.replace('__UXQA_STYLE_NONCE__', styleNonce)
+        : asset.encoding === 'base64' ? Buffer.from(asset.body, 'base64') : asset.body);
     } catch (error) {
       const status = error instanceof HttpError || error instanceof EngineRequestError || error instanceof ProjectAgentError ? error.status : 500;
       const message = error instanceof Error ? error.message : String(error);

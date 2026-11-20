@@ -1,12 +1,28 @@
 // Regenerates src/ui/assets.ts from src/ui/web so the console works from tsc output and single-file builds alike.
 // Run after editing anything in src/ui/web:  node scripts/embed-ui.mjs
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile, readdir, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const files = [['/index.html', 'index.html', 'text/html; charset=utf-8'], ['/app.css', 'app.css', 'text/css; charset=utf-8'], ['/workflow.js', 'workflow.js', 'text/javascript; charset=utf-8'], ['/access.js', 'access.js', 'text/javascript; charset=utf-8'], ['/agent.js', 'agent.js', 'text/javascript; charset=utf-8'], ['/app.js', 'app.js', 'text/javascript; charset=utf-8']];
 const entries = [];
+for (const file of ['react.production.min.js', 'react-dom.production.min.js', 'dayjs.min.js', 'antd.min.js', 'antd.css', 'antd.min.js.LICENSE.txt']) {
+  const name = 'vendor/' + file;
+  const type = file.endsWith('.js') ? 'text/javascript' : file.endsWith('.css') ? 'text/css' : 'text/plain';
+  files.push(['/' + name, name, type + '; charset=utf-8']);
+}
+files.push(['/ant-controls.js', 'ant-controls.js', 'text/javascript; charset=utf-8']);
+files.push(['/assurance.js', 'assurance.js', 'text/javascript; charset=utf-8']);
+files.push(['/calibration.js', 'calibration.js', 'text/javascript; charset=utf-8']);
+for (const name of ['document-import.js', 'source-panel.js', 'vendor/fflate.min.js', 'vendor/pdfjs/pdf.min.mjs', 'vendor/pdfjs/pdf.worker.min.mjs', 'vendor/fflate.LICENSE.txt', 'vendor/pdfjs/LICENSE.txt', 'vendor/pdfjs/cmaps/LICENSE.txt']) {
+  files.push(['/' + name, name, name.endsWith('.txt') ? 'text/plain' : 'text/javascript']);
+}
+for (const file of (await readdir(join(root, 'src/ui/web/vendor/pdfjs/cmaps'))).sort().filter(name => name.endsWith('.bcmap'))) {
+  const name = '/vendor/pdfjs/cmaps/' + file;
+  const bytes = await readFile(join(root, 'src/ui/web', name));
+  entries.push(`  ${JSON.stringify(name)}: { type: "application/octet-stream", body: ${JSON.stringify(bytes.toString('base64'))}, encoding: "base64" },`);
+}
 const icon = await readFile(join(root, 'assets/icon-256.png'));
 entries.push(`  "/icon.png": { type: "image/png", body: ${JSON.stringify(icon.toString('base64'))}, encoding: "base64" },`);
 for (const [route, name, type] of files) {
