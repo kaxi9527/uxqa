@@ -1,6 +1,7 @@
 import { localizedGuide } from '../guidance/guides.en.js';
 import { issueGuidance } from '../guidance/issues.js';
 import type { CheckResult, Violation } from './run.js';
+import { coverageLines } from './coverage.js';
 
 const LEVELS: Record<Violation['level'], string> = { must: 'Must fix', default: 'Should fix', reference: 'Advisory' };
 
@@ -29,7 +30,7 @@ function englishBlock(violation: Violation, index: number): string[] {
 export function formatEnglishPrompt(result: CheckResult, options: { limit?: number; only?: Violation } = {}): string {
   const fresh = options.only ? [options.only] : result.violations.filter((violation) => violation.status === 'new');
   const ordered = [...fresh.filter((violation) => violation.ai?.verdict !== 'not-real'), ...fresh.filter((violation) => violation.ai?.verdict === 'not-real')];
-  if (!ordered.length) return 'No new findings in this round.\n';
+  if (!ordered.length) return ['No new findings in this round.', ...coverageLines(result, 'en'), ''].join('\n');
   const shown = ordered.slice(0, options.limit ?? 50);
   const lines = [
     `Review the following ${shown.length} frontend issue${shown.length === 1 ? '' : 's'} in ${result.productRoot}. Address must-fix items first.`,
@@ -37,6 +38,7 @@ export function formatEnglishPrompt(result: CheckResult, options: { limit?: numb
     '- Change only the listed areas. Reuse existing project components and design tokens.',
     '- If an existing component cannot meet the need, explain the missing capability before adding another implementation.',
     '- Preserve project-specific rules and verify changes against the same coverage.',
+    ...(options.only ? [] : coverageLines(result, 'en')),
   ];
   shown.forEach((violation, index) => lines.push('', ...englishBlock(violation, index + 1)));
   if (ordered.length > shown.length) lines.push('', `${ordered.length - shown.length} more findings were omitted; recheck after addressing these.`);

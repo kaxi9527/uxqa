@@ -19,7 +19,7 @@ import { availableRoundScreenshots } from './ui/screenshot-retention.js';
 const TOOLS = [
   {
     name: 'diagnose_quality',
-    description: '根据已有检测证据、项目约束和 UXQA 内置知识，生成并保存专项诊断与修复方案，包含待验证项和复检方法。不修改项目源码，不把生成方案当作检查通过。',
+    description: '根据已有检测证据、项目约束和 QA大师内置知识，生成并保存专项诊断与修复方案，包含待验证项和复检方法。不修改项目源码，不把生成方案当作检查通过。',
     inputSchema: { type: 'object', properties: { focus: { type: 'string', enum: DIAGNOSIS_FOCUSES.map((item) => item.id), description: '诊断重点，默认 overall' }, objective: { type: 'string', description: '可选：目标、保留条件或需要解决的问题' }, round: { type: 'string', description: '可选：检测轮次，默认最近一次' } } },
   },
   {

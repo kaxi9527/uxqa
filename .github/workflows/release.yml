@@ -130,4 +130,4 @@ jobs:
           tag="v$(node -p 'require("./package.json").version')"
           verify=()
           if [[ "$GITHUB_REF_TYPE" == tag ]]; then verify=(--verify-tag); fi
-          gh release create "$tag" release-assets/publish/* "${verify[@]}" --target "$GITHUB_SHA" --draft --title "UXQA $tag" --notes-file docs/release-notes.md
+          gh release create "$tag" release-assets/publish/* "${verify[@]}" --target "$GITHUB_SHA" --draft --title "QA Master $tag" --notes-file docs/release-notes.md

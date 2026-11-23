@@ -233,7 +233,7 @@ function readme(target, names) {
     '',
     '里面有什么',
     '  runtime/   Node.js 官方运行时（许可证见 runtime/LICENSE）',
-    '  model-core/   UXQA 自己的协议与订阅授权模块，源码编译，不需要另开模型管理产品',
+    '  model-core/   QA大师自己的协议与订阅授权模块，源码编译，不需要另开模型管理产品',
     '  app/       uxqa 本体和它要用的 Playwright、axe-core、TypeScript（各自的许可证在 app/node_modules 里）',
     '  BUILD-INFO.json  这个包是怎么打出来的',
     '',
@@ -252,7 +252,7 @@ function gitRevision() {
 // ---------- 5. one package ----------
 async function packageTarget(target, app, versions) {
   const spec = TARGETS[target];
-  const name = `uxqa-${VERSION}-${target}${localNode ? '-localnode' : ''}`;
+  const name = `qa-master-${VERSION}-${target}${localNode ? '-localnode' : ''}`;
   const dir = join(STAGE, name);
   await rm(dir, { recursive: true, force: true });
   await mkdir(join(dir, 'runtime'), { recursive: true });
@@ -291,7 +291,7 @@ async function packageTarget(target, app, versions) {
 }
 
 async function writeSums() {
-  const files = (await readdir(RELEASE)).filter((name) => /^uxqa-.*\.(zip|tar\.gz)$/.test(name)).sort();
+  const files = (await readdir(RELEASE)).filter((name) => /^qa-master-.*\.(zip|tar\.gz)$/.test(name)).sort();
   const lines = [];
   for (const name of files) {
     const hash = createHash('sha256').update(await readFile(join(RELEASE, name))).digest('hex');

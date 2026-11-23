@@ -158,11 +158,10 @@ export async function runSourceCommand(argv: string[], io: { stdin?: string } = 
   let files = flags.lists.get('--files');
   if (flags.switches.has('--changed') || flags.switches.has('--staged')) {
     files = await changedFiles(productRoot, flags.switches.has('--staged'));
-    if (!files.length) { console.log('没有改动的文件需要检查。'); return 0; }
   }
   const baselinePath = await defaultBaseline(productRoot, flags.values.get('--baseline'));
   if (flags.switches.has('--update-baseline')) {
-    if (files?.length) throw new UsageError('--update-baseline 要检查整个项目，不能和 --files、--changed 一起用');
+    if (files !== undefined) throw new UsageError('--update-baseline 要检查整个项目，不能和 --files、--changed 一起用');
     const target = baselinePath ?? join(productRoot, '.uxqa/baseline.json');
     const result = await runCheck({ source, rulesPath: flags.values.get('--rules') });
     const baseline = await writeBaseline(target, result);

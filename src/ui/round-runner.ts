@@ -29,9 +29,10 @@ export async function runRound(entry: ProjectEntry, options: { signal?: AbortSig
   let capture: CaptureReport | undefined;
   let partial: string | undefined;
   // No browser yet (it is downloaded only after the person agrees): the source check still counts as a full round.
-  const noBrowser = !!entry.pages?.baseUrl && (options.skipPages || !(await browserReady('shell').catch(() => true)));
+  const captureRequested = !!entry.pages?.baseUrl && !options.skipPages;
+  const noBrowser = captureRequested && !(await browserReady('shell').catch(() => true));
   if (noBrowser) partial = MISSING_SENTENCE;
-  else if (entry.pages?.baseUrl && !aborted()) {
+  else if (captureRequested && entry.pages && !aborted()) {
     progress({ phase: 'pages', message: '正在打开页面截图' });
     try {
       // "Find more pages" also opens the plain paths declared in the product's router.

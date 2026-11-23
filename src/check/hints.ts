@@ -290,6 +290,9 @@ export function cssHints(text: string): Array<Hint & { line: number }> {
     const width = body.match(/(?<![\w-])(min-)?width\s*:\s*(\d+(?:\.\d+)?)px/i);
     if (width && Number(width[2]) >= 480 && !/@media|@container/.test(selector)) hints.push({ check: 'wide-fixed-width', detail: `${width[2]}px`, line: at(/(?<![\w-])(min-)?width\s*:/i) });
     for (const match of body.matchAll(/!important/g)) {
+      // Author display rules can override the browser's hidden attribute. Its reset preserves HTML semantics.
+      const before = body.slice(0, match.index);
+      if (selector === '[hidden]' && /(?:^|;)\s*display\s*:\s*none\s*$/i.test(before)) continue;
       if (!important) firstImportant = lineAt((block.index ?? 0) + block[1].length + 1 + (match.index ?? 0));
       important++;
     }

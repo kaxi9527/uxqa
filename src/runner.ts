@@ -7,6 +7,7 @@ import { measureMotion, measureReflow, traverseKeyboard } from './a11y-checks.js
 import { readGitState, UXQA_VERSION } from './evidence.js';
 import { matchesUrl } from './glob.js';
 import { executeStep } from './steps.js';
+import { INTERACTION_SCENARIOS } from './types.js';
 import { runBusinessJourney } from './business-journey.js';
 import type { CheckResult, DataNature, Finding, FlowConfig, HarnessConfig, RunEvidence, RunResult } from './types.js';
 
@@ -41,7 +42,7 @@ function flowDataNature(flow: FlowConfig, base: DataNature): DataNature {
   return flow.offline || flow.network?.some((rule) => rule.abort || rule.respond) ? 'mock' : base;
 }
 
-async function installNetworkRules(page: Page, flow: FlowConfig, injected: WeakSet<Request>): Promise<void> {
+async function installNetworkRules(page: Page, flow: FlowConfig, injected: WeakSet<Request>, recovery: { injected: boolean }): Promise<void> {
   for (const rule of flow.network ?? []) {
     let used = 0;
     await page.route((url) => matchesUrl(rule.match, url.toString()), async (route: Route) => {
@@ -51,6 +52,8 @@ async function installNetworkRules(page: Page, flow: FlowConfig, injected: WeakS
       if (rule.delayMs) await new Promise((resolve) => setTimeout(resolve, rule.delayMs));
       if (rule.abort) { injected.add(request); return route.abort(rule.abort); }
       if (rule.respond) {
+        injected.add(request);
+        if (flow.scenario === 'failure-recovery') recovery.injected = true;
         const { status, json, body, contentType, headers } = rule.respond;
         const isJson = json !== undefined;
         return route.fulfill({ status, headers, contentType: contentType ?? (isJson ? 'application/json' : 'text/plain'), body: isJson ? JSON.stringify(json) : body ?? '' });
@@ -148,7 +151,7 @@ export async function runAudit(config: HarnessConfig, options: RunOptions): Prom
             const reason = 'Blocked: page did not load';
             if (!declared('axe', { dimension: 'accessibility', ...where })) addCheck({ check: 'axe', dimension: 'accessibility', status: 'blocked', detail: reason, ...where });
             if (!declared('keyboard-focus', { dimension: 'accessibility', ...where })) addCheck({ check: 'keyboard-focus', dimension: 'accessibility', status: 'blocked', detail: reason, ...where });
-            for (const flow of routeFlows) addCheck({ check: 'flow', dimension: 'behavior', status: 'blocked', detail: reason, flow: flow.name, ...(flow.requirement ? { requirement: flow.requirement } : {}), dataNature: flowDataNature(flow, config.evidence.dataNature), ...where });
+            for (const flow of routeFlows) addCheck({ check: flow.scenario ?? 'flow', dimension: 'behavior', status: 'blocked', detail: reason, flow: flow.name, ...(flow.requirement ? { requirement: flow.requirement } : {}), dataNature: flowDataNature(flow, config.evidence.dataNature), ...where });
           }
 
           if (loaded) {
@@ -228,25 +231,38 @@ export async function runAudit(config: HarnessConfig, options: RunOptions): Prom
               let failure: string | undefined;
               let failedStep: string | undefined;
               const flowEvidence: string[] = [];
+              const recovery = { injected: false, recovered: false };
+              const retryResponse = (response: import('playwright').Response) => {
+                const request = response.request();
+                if (recovery.injected && request.method() === 'GET' && !injectedRequests.has(request) && response.ok() &&
+                    matchesUrl(flow.network![0].match, response.url())) recovery.recovered = true;
+              };
+              if (flow.scenario === 'failure-recovery') page.on('response', retryResponse);
+              let blocked = false;
               injecting = !!(flow.network?.length || flow.offline);
               flowRequests = [];
               try {
-                await installNetworkRules(page, flow, injectedRequests);
+                // An outstanding request from the preceding page must not consume the next flow's one-shot fault.
+                if (flow.network?.length) await page.goto('about:blank');
+                await installNetworkRules(page, flow, injectedRequests, recovery);
                 await page.goto(absoluteUrl(config.baseUrl, route), { waitUntil: 'load' });
                 if (flow.offline) await context.setOffline(true);
                 for (const [index, step] of flow.steps.entries()) {
                   try {
-                    await executeStep(page, step, { requests: flowRequests });
+                    await executeStep(page, step, { requests: flowRequests, recovery });
                   } catch (error) {
                     failure = errorMessage(error);
                     failedStep = `${flow.name} step ${index + 1} (${step.action})`;
+                    blocked = index < (flow.preparationSteps ?? 0) || (flow.scenario === 'failure-recovery' && !recovery.injected);
                     break;
                   }
                 }
               } catch (error) {
                 failure = errorMessage(error);
                 failedStep = `${flow.name} setup`;
+                blocked = !!flow.scenario;
               } finally {
+                page.off('response', retryResponse);
                 if (flow.offline) await context.setOffline(false).catch(() => undefined);
                 await page.unrouteAll({ behavior: 'ignoreErrors' }).catch(() => undefined);
               }
@@ -255,9 +271,9 @@ export async function runAudit(config: HarnessConfig, options: RunOptions): Prom
                 await page.screenshot({ path: screenshot, fullPage: true }).then(() => { flowEvidence.push(screenshot); artifacts.push(screenshot); }).catch(() => undefined);
               }
               injecting = false;
-              if (failure) findings.push({ id: `flow-${label}-${safeName(flow.name)}`, severity: 'blocking', kind: 'flow', message: failure, ...where, step: failedStep, ...requirement, evidence: flowEvidence });
+              if (failure && !blocked) findings.push({ id: `flow-${label}-${safeName(flow.name)}`, severity: 'blocking', kind: 'flow', message: failure, ...where, step: failedStep, ...requirement, evidence: flowEvidence });
               addCheck({
-                check: 'flow', dimension: 'behavior', status: failure ? 'fail' : 'pass', flow: flow.name, ...requirement, dataNature,
+                check: flow.scenario ?? 'flow', dimension: 'behavior', status: blocked ? 'blocked' : failure ? 'fail' : 'pass', flow: flow.name, ...requirement, dataNature,
                 detail: `${flow.expected ? `${flow.expected} — ` : ''}${failure ? `failed at ${failedStep}: ${failure}` : `${flow.steps.length} step(s) passed`}${dataNature === 'mock' ? ' [simulated network/offline state; not real integration]' : ''}`,
                 ...where, evidence: flowEvidence,
               });
@@ -338,6 +354,21 @@ export async function runAudit(config: HarnessConfig, options: RunOptions): Prom
 
   // Coverage the browser run cannot provide is listed explicitly rather than implied by a pass.
   const global = { route: '(all)', viewport: '(all)' };
+  for (const scenario of INTERACTION_SCENARIOS) {
+    const bound = config.flows.filter(flow => flow.scenario === scenario);
+    if (!bound.length && !declared(scenario, {dimension:'behavior', ...global})) {
+      const missing = {
+        'failure-recovery':'读取请求、错误提示、恢复内容 / GET pattern, error state and recovered content',
+        'save-focus':'保存控件、成功状态、焦点落点 / save control, success state and expected focus',
+        'language-entry':'语言控件、目标语言、首个入口 / language control, target locale and first entry',
+      };
+      addCheck({check:scenario, dimension:'behavior', status:'not-verified', detail:'未绑定项目场景 / No project scenario binding · '+missing[scenario], ...global});
+    }
+    for (const flow of bound) for (const viewport of config.viewports) {
+      if (!checks.some(c => c.flow === flow.name && c.route === flow.route && c.viewport === viewport.name))
+        addCheck({check:scenario, flow:flow.name, dimension:'behavior', status:'blocked', detail:'浏览器未完成页面准备 / Browser setup did not complete', route:flow.route!, viewport:viewport.name});
+    }
+  }
   const gap = (check: string, dimension: CheckResult['dimension'], detail: string, extra: Partial<NewCheck> = {}) => {
     if (!declared(check, { dimension, ...global })) addCheck({ check, dimension, status: 'not-verified', detail, ...global, ...extra });
   };
@@ -356,5 +387,10 @@ export async function runAudit(config: HarnessConfig, options: RunOptions): Prom
   gap('engineering-gates', 'engineering', 'Typecheck, lint, build and unit/integration tests are outside uxqa run; record them separately');
   gap('deployment', 'operations', 'Deployment, release and rollback were not verified; a local or preview run is not deployment evidence');
 
-  return { configName: config.name, startedAt, endedAt: new Date().toISOString(), findings, artifacts, checks, evidence };
+  const coverage = {
+    sourceDirectories: [],
+    pages: checks.filter(c => c.check === 'page-load').map(({route, viewport, status}) => ({route, viewport, status})),
+    skippedChecks: checks.filter(c => ['blocked','not-verified','not-applicable'].includes(c.status)).map(({check, route, viewport, status, detail}) => ({check, route, viewport, status, detail})),
+  };
+  return { configName: config.name, startedAt, endedAt: new Date().toISOString(), findings, artifacts, checks, evidence, coverage };
 }

@@ -21,7 +21,7 @@ const fixture = createServer((req, res) => {
 try {
   const extract = spawnSync(TAR, ['-xf', archive, '-C', work], { encoding: 'utf8' });
   assert.equal(extract.status, 0, `Extract failed: ${extract.stderr}`);
-  const top = (await readdir(work)).find((name) => name === 'UXQA.app' || name.startsWith('uxqa-'));
+  const top = (await readdir(work)).find((name) => name === 'QA Master.app' || name === 'UXQA.app' || name.startsWith('qa-master-') || name.startsWith('uxqa-'));
   assert.ok(top, 'Archive has an application folder');
   const native = top.endsWith('.app');
   const root = native ? join(work, top, 'Contents/Resources') : join(work, top);

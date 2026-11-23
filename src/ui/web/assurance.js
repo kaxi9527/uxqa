@@ -5,7 +5,16 @@ function assuranceCenter() {
   const endpoint = '/projects/' + projectId + '/assurance';
   const panel = h('section', { class: 'quality-main assurance-panel', 'aria-label': t('专项检测', 'Specialist checks') });
   const fail = e => toast(e.message, 'error');
+  let sampleTimer;
+  async function watchSample() {
+    if (!panel.isConnected) return;
+    try {
+      if (!(await api(endpoint+'/sample-status')).sampling) { await refresh();return; }
+    } catch { /* The visible Refresh status control remains available while offline. */ }
+    if (panel.isConnected) sampleTimer=setTimeout(watchSample,1200);
+  }
   async function refresh() {
+    clearTimeout(sampleTimer);
     try {
       const [data, history] = await Promise.all([api(endpoint), api('/projects/' + projectId + '/diagnosis')]);
       if (!panel.isConnected) return;
@@ -29,6 +38,7 @@ function assuranceCenter() {
               if (panel.isConnected) { history.plans.unshift(plan); draw(); showDiagnosisPlan(plan, 'verification'); }
             } catch (e) { fail(e); button.disabled = false; }
           }, { type: 'primary', disabled: !round }),
+          active.id==='logic'?antButton(t('从需求开始验收','Check a requirement'),()=>taskDesk(projectId)):null,
           antButton(t('关联文档条款','Link a source clause'), () => editAssuranceSource(endpoint, active, data.suites, refresh)),
           active.id === 'fidelity' ? antButton(t('对比设计稿','Compare design frame'), () => compareAssuranceFrame(endpoint, round, refresh), { disabled: !round }) : null);
         fill(panel, h('label', { class: 'workflow-field' }, t('检测类别','Check category'), select),
@@ -37,6 +47,7 @@ function assuranceCenter() {
             h('ol', {}, active.checks.map(([name, procedure, decision]) => h('li', {}, h('strong', { text: name }), h('p', { text: procedure }), h('p', {class:'muted',text: decision})))),
             h('p', { text: active.boundary }), h('ul', {}, active.sources.map(url => h('li', {}, h('a', { href: url, target: '_blank', rel: 'noreferrer', text: new URL(url).hostname + ' · ' + decodeURIComponent(new URL(url).pathname.split('/').filter(Boolean).pop()) }))))),
           evidencePanel(endpoint,active,data.suites,data.sources || [],round,refresh),
+          active.id==='fidelity'?regionCoverage(results):null,
           actions, ['interaction','accessibility','compatibility','performance'].includes(active.id) ? assuranceSample(endpoint, active, round, samples, data.sampling, refresh) : null,
           active.id === 'usability' && round ? usabilitySessions(endpoint, round, data.sessions.filter(s => s.roundId === round.id), refresh) : null,
           findings.length ? antButton(t('查看相关发现（','View related findings (') + findings.length + ')', () => {
@@ -64,6 +75,7 @@ function assuranceCenter() {
             plans.map(plan => antButton(plan.title + ' · ' + timeText(plan.at), () => showDiagnosisPlan(plan, 'verification')))) : null);
       }
       draw();
+      if (data.sampling && panel.isConnected) sampleTimer=setTimeout(watchSample,1200);
     } catch (e) { fill(panel, h('p', { role: 'alert', text: e.message }), antButton(t('重试读取','Retry'), refresh)); }
   }
   panel.append(h('p', { class: 'muted', text: t('正在读取项目检测依据…','Loading project sources…') }));
@@ -105,31 +117,94 @@ function usabilitySessions(endpoint, round, sessions, refresh) {
       s.reportedEase?h('p',{text:t('参与者自评容易程度 · ','Participant-rated ease · ')+s.reportedEase+'/7'}):null,h('p',{text:s.evidence}),advice[s.friction] ? h('p',{text:t('待验证建议：','Suggestion to test: ')+advice[s.friction]}) : null)))));
 }
 
+function interactionScenarioFields(t,samples,route) {
+  const choices = [['',t('常规页面检查','Standard page checks')],['failure-recovery',t('失败后恢复','Recover after a failure')],
+    ['save-focus',t('保存后继续键盘操作','Continue by keyboard after saving')],['language-entry',t('切换语言后的首个入口','First entry after switching language')]];
+  const definitions = {
+    'failure-recovery': [['request','首次失败的 GET 地址匹配式','GET request URL pattern','**/api/items'],['error','错误提示','Error message','#error'],['ready','恢复后的内容','Recovered content','#items'],['retry','重试按钮（自动重试可留空）','Retry button (omit for automatic retries)','#retry',true]],
+    'save-focus': [['save','保存控件','Save control','#save'],['saved','保存后才出现的确认状态','Confirmation visible only after saving','#saved'],['continuation','保存后应获焦的控件','Expected focus after saving','#edit']],
+    'language-entry': [['switcher','切换目标语言的控件','Language switch control','#english'],['option','下拉选择值（按钮可留空）','Option value (omit for a button)','en',true],['lang','预期网页语言','Expected document language','en'],['role','第一个入口的角色','First entry role','link'],['name','目标语言下的无障碍名称','Accessible name in the selected language','Skip to main content']],
+  };
+  const select=h('select',{class:'input'},choices.map(([value,text])=>h('option',{value,text})));
+  const fields=h('div',{class:'stack-tight'}), inputs=new Map();
+  const setup=h('textarea',{class:'input',rows:3,placeholder:'[{"action":"click","target":{"css":"#edit"}}]'});
+  function render(binding) {
+    fields.replaceChildren(); inputs.clear();
+    if (!select.value) return;
+    fields.append(h('p',{class:'muted',text:t('控件位置可填 CSS 选择器。本项目在本机保存绑定和前置步骤，用测试数据执行保存操作。','Use CSS selectors for controls. Bindings and setup steps are saved locally with this project. Use test data for save actions.')}));
+    for (const [key,zh,en,placeholder,optional] of definitions[select.value]) {
+      const input=h('input',{class:'input',required:!optional,placeholder});
+      const value=key==='role'||key==='name' ? binding?.entry?.[key] : binding?.[key];
+      input.value=typeof value==='object' ? (value.css ?? JSON.stringify(value)) : (value ?? '');
+      inputs.set(key,input);fields.append(reviewField(t(zh,en),input));
+    }
+    setup.value=binding?.setup?.length ? JSON.stringify(binding.setup,null,2) : '';
+    fields.append(h('details',{},h('summary',{text:t('前置操作（可选）','Preparation steps (optional)')}),reviewField(t('操作步骤 JSON','Setup steps JSON'),setup)));
+  }
+  function restore(binding) {select.value=binding?.type || '';render(binding);}
+  select.onchange=()=>render(samples.find(s=>s.route===route.value && s.scenario?.type===select.value)?.scenario);
+  restore(samples[0]?.scenario);
+  return {element:h('div',{class:'stack-tight'},reviewField(t('内置交互场景','Built-in interaction scenario'),select),fields),restore,selectedLabel:()=>select.selectedOptions[0].textContent, read(){
+    if (!select.value) return undefined;
+    const binding={type:select.value};
+    for(const [key,input] of inputs) {
+      const value=input.value.trim();
+      if(value) binding[key]=['save','saved','continuation','error','ready','retry','switcher'].includes(key)?(value.startsWith('{')?JSON.parse(value):{css:value}):value;
+    }
+    if(select.value==='language-entry'){binding.entry={role:binding.role,name:binding.name};delete binding.role;delete binding.name;}
+    if(setup.value.trim()) binding.setup=JSON.parse(setup.value);
+    return binding;
+  }};
+}
+
 function assuranceSample(endpoint, suite, round, samples, running, refresh) {
   const t = accessText, pages = project().pages;
-  const route = h('input', { class:'input', required:true, value:pages?.routes?.[0] || '/', 'aria-label':t('实测页面路径','Page route to sample') });
-  const status = h('p', { class:'muted', role:'status' });
+  const route = h('input', { class:'input', required:true, value:samples[0]?.route || pages?.routes?.[0] || '/', 'aria-label':t('实测页面路径','Page route to sample') });
+  const status = h('p', { class:'muted', role:'status', 'data-sample-status':'' });
   const motion=suite.id==='performance';
+  const interaction=suite.id==='interaction' ? interactionScenarioFields(t,samples,route) : null;
   const trigger=h('select',{class:'input'},[['idle',t('静止基线','Idle baseline')],['scroll',t('滚动','Scroll')],['focus',t('聚焦','Focus')],['hover',t('悬停','Hover')]].map(([value,text])=>h('option',{value,text})));
   const selector=h('input',{class:'input',value:'body',maxlength:500,required:motion});
   const reduce=h('input',{type:'checkbox'});
-  const action = h('button', { type:'submit', class:'btn', disabled:running || !round || !pages, text:t('运行页面实测','Run page sample') });
+  const action = h('button', { type:'submit', class:'btn', disabled:running || !round || !pages, text:running?t('正在实测…','Running sample…'):t('运行页面实测','Run page sample') });
+  if(running) status.textContent=t('本项目正在实测，完成后会自动显示结果。','A sample is running. Results will appear automatically.');
   const form = h('form', { class:'stack-tight', onsubmit: async event => {
-    event.preventDefault(); action.disabled = true; status.textContent = t('正在采集此路径的页面证据…','Collecting evidence from this route…');
-    try { await api(endpoint + '/sample', { method:'POST', body:{ suite:suite.id, roundId:round.id, route:route.value,
-      ...(motion?{trigger:trigger.value,selector:selector.value,reducedMotion:reduce.checked}:{}) } }); await refresh(); }
-    catch (e) { status.textContent = e.message; action.disabled = false; }
+    event.preventDefault(); action.disabled = true;form.setAttribute('aria-busy','true');action.textContent=t('正在实测…','Running sample…');
+    status.textContent=(interaction?.selectedLabel() || suite.title)+' · '+(motion?t('正在采集动效。','Collecting motion evidence.'):t('正在检查桌面和窄屏。完成后会显示结果。','Checking desktop and narrow views. Results will appear here.'));
+    try { const result=await api(endpoint + '/sample', { method:'POST', body:{ suite:suite.id, roundId:round.id, route:route.value,
+      ...(interaction ? {scenario:interaction.read()} : {}),
+      ...(motion?{trigger:trigger.value,selector:selector.value,reducedMotion:reduce.checked}:{}) } });
+      if(!form.isConnected)return;
+      const panel=form.closest('.assurance-panel');
+      const focusResult=form.isConnected && (document.activeElement===document.body || form.contains(document.activeElement));
+      await refresh();
+      if(focusResult && panel?.isConnected) panel.querySelector('[data-sample-result="'+CSS.escape(result.id)+'"]')?.focus();
+    } catch (e) { status.textContent=e.message;action.disabled=false;action.textContent=t('运行页面实测','Run page sample');form.removeAttribute('aria-busy'); }
   } }, h('label', { class:'workflow-field' }, t('实测页面路径','Page route to sample'), route),
+    interaction?.element,
     motion?[reviewField(t('采样触发方式','Sample trigger'),trigger),reviewField(t('目标元素选择器','Target CSS selector'),selector),
       h('label',{},reduce,' ',t('使用减少动态效果偏好','Use reduced-motion preference'))]:null,h('div', { class:'quality-actions' },action,
-    running ? antButton(t('刷新进度','Refresh status'), refresh) : null),status);
+    running ? antButton(t('刷新进度','Refresh status'), refresh) : null));
   const labels = {pass:t('通过','Pass'), fail:t('发现偏差','Failed'), blocked:t('阻塞','Blocked'), 'not-verified':t('待验证','Unverified'), 'not-applicable':t('不适用','Not applicable')};
-  return h('section', {class:'stack-tight'}, form, !pages ? h('p',{class:'muted',text:t('先设置项目预览地址。','Configure the project preview URL first.')}) : null,
-    samples.map(item => h('details', {}, h('summary', {text:t('实测记录','Page sample') + ' · ' + item.route + ' · ' + timeText(item.at)}),
+  const scenarioNames={'failure-recovery':t('失败后恢复','Recover after a failure'),'save-focus':t('保存后继续键盘操作','Continue by keyboard after saving'),'language-entry':t('切换语言后的首个入口','First entry after switching language')};
+  return h('section', {class:'stack-tight'}, form, status, !pages ? h('p',{class:'muted',text:t('先设置项目预览地址。','Configure the project preview URL first.')}) : null,
+    samples.map(item => {
+      const checks=item.checks || [], counts=['fail','blocked','pass','not-verified','not-applicable'].flatMap(key=>{
+        const n=checks.filter(c=>c.status===key).length;return n ? [labels[key]+' '+n] : [];
+      });
+      const scenario=checks.find(c=>c.flow && scenarioNames[c.check]);
+      const outcome=item.reason ? labels.blocked : counts.join(' · ') || t('采样完成','Sample collected');
+      return h('details', {}, h('summary', {'data-sample-result':item.id,text:t('实测记录','Page sample') + ' · ' + item.route + ' · ' + (scenario ? scenarioNames[scenario.check]+' · ' : '') + outcome + ' · ' + timeText(item.at)}),
       item.reason ? h('p',{text:labels.blocked + ' · '+item.reason}) : null,
+      interaction && item.scenario ? antButton(t('按原配置复测','Rerun with these settings'),()=>{
+        if(action.disabled)return;
+        route.value=item.route;interaction.restore(item.scenario);action.focus();form.requestSubmit();
+      },{disabled:running || !pages}) : null,
+      interaction && scenario && !item.scenario ? h('p',{class:'muted',text:t('这条历史记录未保存绑定，复测时请重新指定控件。','This older record has no saved binding. Select the controls again to rerun it.')}) : null,
       item.sample ? h('pre', { class:'mono', text:JSON.stringify(item.sample,null,2) }) : null,
-      (item.checks || []).map(c => h('p', { text:labels[c.status] + ' · ' + c.check + ' · ' + c.viewport + ' · ' + c.detail })),
-      (item.findings || []).map(f => h('p', {text:f.message + ' · ' + (f.evidence || []).join(', ')})))));
+      (item.checks || []).map(c => h('p', { text:labels[c.status] + ' · ' + (scenarioNames[c.check] || c.check) + ' · ' + c.viewport + ' · ' + c.detail })),
+      (item.findings || []).map(f => h('p', {text:f.message + ' · ' + (f.evidence || []).join(', ')})));
+    }));
 }
 
 function editAssuranceSource(endpoint, active, suites, refresh, seed) {
@@ -201,6 +276,7 @@ function designComparisonResult(result) {
     } catch (e) { if (compare.open) pair.textContent=e.message; }
   }},h('summary',{text:t('并排查看设计与页面','Compare design and observed view side by side')}),pair);
   return h('div', {}, h('p', { role: 'status', text: (result.changedPixels ? t('差异待核对','Differences to review') : t('容差内一致','Matched within tolerance')) + ' · ' + result.changedPixels + ' / ' + result.totalPixels + t(' 像素；颜色通道容差 24。',' pixels; RGB channel tolerance 24.') }),compare,
+    result.region?h('p',{text:[result.component||t('组件待映射','Unmapped component'),result.mapping==='manual'?t('人工关联','Manual mapping'):null,result.state,result.viewportWidth+'px',t('已观察到的使用页面','Observed pages')+' · '+(result.impacted?.join(', ')||'—')].filter(Boolean).join(' · ')}):null,
     result.diff ? h('details', {}, h('summary', { text: t('查看差异图','View pixel differences') }),
       h('img', { class: 'assurance-diff', loading: 'lazy', src: shotUrl(result.diff), alt: t('红色标记发生变化的像素','Changed pixels highlighted in red'), onerror: e => {
         e.currentTarget.replaceWith(h('p', { text: t('差异图不可用或已过期。','The difference image is unavailable or expired.') }));
@@ -215,18 +291,20 @@ function compareAssuranceFrame(endpoint, round, refresh, source) {
     const locator = h('input', { class: 'input', required: true, maxlength: 500 });
     if(source){path.value=source.name;path.readOnly=true;locator.value=source.revision.slice(0,12);}
     const select = h('select', { class: 'input' }, views.map(v => h('option', { value: v.image, text: v.route + ' · ' + v.width + 'px' })));
+    const region=designRegionPicker(source,views,select);
     const aligned = h('input', { type: 'checkbox', required: true });
     const result = h('div', { 'aria-live': 'polite' });
     const label = (name, input) => h('label', { class: 'workflow-field' }, name, input);
     const submit = h('button', { class: 'btn primary', type: 'submit', disabled: !views.length, text: t('开始比对','Compare images') });
     const form = h('form', { class: 'assurance-form', onsubmit: async e => {
       e.preventDefault(); submit.disabled = true; result.textContent = t('正在比较像素…','Comparing pixels…');
-      try { const data = await api(endpoint + '/compare', { method:'POST', body:{ path:path.value, evidenceId:source?.id, locator:locator.value, view:select.value, roundId:round.id, aligned:aligned.checked } });
+      try { const data = await api(endpoint + '/compare', { method:'POST', body:{ path:path.value, evidenceId:source?.id, locator:locator.value, view:select.value, roundId:round.id, aligned:aligned.checked,...region.value() } });
         fill(result, designComparisonResult(data)); await refresh();
       } catch (err) { result.textContent = err.message; }
       finally { submit.disabled = false; }
     } }, label(source?t('已导入画面','Imported frame'):t('项目内的设计稿 PNG','Design PNG in this project'),path), label(t('帧版本或节点','Frame revision or node'),locator),
       label(t('本轮实测画面','Observed view in this round'),select), views.length ? null : h('p', { text:t('本轮没有可用页面截图，请配置预览并重新检查。','This round has no available view. Configure a preview and run a new check.') }),
+      region.element,
       h('label', {}, aligned, ' ', t('已核对角色、内容、主题、字体、比例和裁切范围。','I matched role, content, theme, fonts, scale and crop.')), result,
       h('div', { class:'row' }, submit, antButton(t('关闭','Close'), () => close(false))));
     append(panel,[h('h2',{text:t('对比设计稿','Compare design frame')}),form]);

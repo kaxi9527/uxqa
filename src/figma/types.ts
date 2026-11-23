@@ -87,7 +87,7 @@ export interface FigmaReport {
   source: CaptureMeta & { pageName: string; inputHashes: Record<string, string>; captureEnd: string };
   status: 'complete' | 'partial';
   verdict: 'issues-found' | 'needs-review' | 'limited-pass';
-  coverage: { expectedComponents: number; capturedComponents: number; missingIds: string[]; themes: string[] };
+  coverage: { expectedComponents: number; capturedComponents: number; missingIds: string[]; themes: string[]; sourceDirectories?: string[]; skippedRules?: string[] };
   summary: Record<CheckStatus, number>;
   checks: FigmaCheck[];
   limitations: string[];

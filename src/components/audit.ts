@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { directoryCounts } from '../check/coverage.js';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { chromium, type Browser } from 'playwright';
@@ -55,7 +56,7 @@ export async function auditComponents(config: HarnessConfig | undefined, options
             result.css.push({route,viewport:viewport.name,audit:css});
             result.tools.push({name:'project-wallace',version:'9.9.3',status:css.status,artifact:css.artifact,error:css.gaps.length ? css.gaps.join('; '):undefined});
             result.coverage.push({...row,status:'complete'});
-            for (const flow of config.flows.filter((entry) => !entry.route || entry.route === route)) {
+            for (const flow of config.flows.filter((entry) => !entry.scenario && (!entry.route || entry.route === route))) {
               const state = `flow:${flow.name}`;
               try {
                 await page.goto(url,{waitUntil:'load'});
@@ -90,5 +91,15 @@ export async function auditComponents(config: HarnessConfig | undefined, options
   result.candidates = groupObservations(result.observations);
   result.status = result.coverage.some((entry) => entry.status==='failed') || result.tools.some((tool) => tool.status==='failed' || tool.status==='partial') ? 'partial':'complete';
   result.endedAt = new Date().toISOString();
+  result.scanScope = {
+    directories: directoryCounts((result.source?.files ?? []).map(file => file.replaceAll('\\','/'))),
+    gaps: [
+      ...(!result.source ? ['Source rules · no source directory supplied'] : []),
+      ...(!config ? ['Browser checks · no browser routes configured'] : []),
+      ...(config && options.designTokens === false ? ['Design tokens · disabled by configuration'] : []),
+      ...(config?.flows.filter(f=>f.scenario).map(f=>f.name+' · run with the interaction runner (uxqa run)') ?? []),
+      ...result.tools.filter(t=>t.status!=='complete').map(t=>t.name+' · '+t.status+' · '+(t.error || 'No eligible input or complete evidence')),
+    ],
+  };
   return result;
 }

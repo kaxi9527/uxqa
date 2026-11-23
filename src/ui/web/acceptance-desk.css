@@ -1,0 +1,11 @@
+.task-tools{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:.75rem 0 1rem}
+.task-fields{display:grid;grid-template-columns:minmax(4rem,auto) 1fr;gap:.5rem 1rem;margin:.5rem 0}
+.task-fields dt{font-weight:600}.task-fields dd{margin:0;overflow-wrap:anywhere}
+.design-region-image{position:relative;width:fit-content;max-width:100%;margin:.75rem 0}
+.design-region-image img{display:block;max-width:100%;height:auto;cursor:crosshair;touch-action:none}
+.design-region-marker{position:absolute;pointer-events:none;outline:2px solid #6043a4;background:rgb(96 67 164 / 16%)}
+.design-region-fields{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.5rem}
+.task-comparison{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,14rem),1fr));gap:1rem}
+.task-phase{margin:.5rem 0;padding:.5rem .75rem;background:var(--surface,#f5f4f8);border-radius:.5rem;overflow-wrap:anywhere}
+.task-phase p{white-space:pre-line}
+.region-matrix{max-width:100%;overflow:auto}.region-matrix table{border-collapse:collapse;text-align:start}.region-matrix th,.region-matrix td{padding:.35rem .6rem}.region-matrix caption{text-align:start}

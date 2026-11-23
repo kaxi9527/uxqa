@@ -11,6 +11,7 @@ type PhaseResult = Pick<CheckResult, 'status' | 'route' | 'detail'> & {
   observed?: { rows: Row[]; saveAs?: string; equals?: string; where?: Record<string, string> };
 };
 class BusinessMismatch extends Error {}
+class MissingWitness extends Error {}
 
 async function readList(page: Page, list: JourneyList): Promise<Row[]> {
   const container = page.locator(list.container);
@@ -29,7 +30,7 @@ async function readList(page: Page, list: JourneyList): Promise<Row[]> {
   }, list);
 }
 
-function compareRows(expected: Row[], actual: Row[]): void {
+function rowDifferences(expected: Row[], actual: Row[]): Array<[string,number]> {
   const delta = new Map<string, number>();
   for (const row of expected) {
     const key = JSON.stringify(row);
@@ -39,8 +40,7 @@ function compareRows(expected: Row[], actual: Row[]): void {
     const key = JSON.stringify(row);
     delta.set(key, (delta.get(key) ?? 0) - 1);
   }
-  const differences = [...delta].filter(([, count]) => count !== 0);
-  if (differences.length) throw new BusinessMismatch(differences.slice(0, 20).map(([key, count]) => `${count > 0 ? 'missing' : 'extra'} ×${Math.abs(count)} ${key}`).join('\n') + (differences.length > 20 ? `\n… ${differences.length - 20} more differing keys` : ''));
+  return [...delta].filter(([, count]) => count !== 0);
 }
 
 export async function runBusinessJourney(browser: Browser, baseUrl: string, plan: BusinessJourney, options: {
@@ -52,10 +52,15 @@ export async function runBusinessJourney(browser: Browser, baseUrl: string, plan
   const results: PhaseResult[] = [];
   let stopped = false;
   let relationFailed = false;
+  let missingWitness = '';
   try {
     for (const phase of plan.phases) {
       const where = { phase: phase.name, actor: phase.actor, route: phase.route };
-      if (relationFailed && phase.steps.some(step => !step.action.startsWith('expect') && step.action !== 'waitFor')) stopped = true;
+      if (missingWitness) {
+        results.push({...where,status:'not-verified',detail:'未执行，缺少前置证据 / Missing prerequisite: '+missingWitness});
+        continue;
+      }
+      if (relationFailed && phase.steps.some(step => !step.action.startsWith('expect') && step.action !== 'waitFor' && step.action !== 'waitForHidden')) stopped = true;
       if (stopped) {
         results.push({ ...where, status: 'blocked', detail: 'An earlier operation or prerequisite did not complete' });
         continue;
@@ -98,8 +103,13 @@ export async function runBusinessJourney(browser: Browser, baseUrl: string, plan
         let detail = 'Completed ' + phase.steps.length + ' step(s)';
         try {
           const target = new URL(phase.route, baseUrl);
-          const response = await page.goto(target.href, { waitUntil: 'load' });
-          if (!response?.ok() || new URL(page.url()).origin !== target.origin) throw new Error('Test page unavailable for actor: ' + phase.actor);
+          if (phase.continueOnPage) {
+            if (page.url() !== target.href) throw new MissingWitness('原操作页面已变化 / Original page is no longer active');
+          } else {
+            const response = await page.goto(target.href, { waitUntil: 'load' });
+            if (!response?.ok() || new URL(page.url()).origin !== target.origin) throw new Error('Test page unavailable for actor: ' + phase.actor);
+            if (phase.exactRoute && page.url()!==target.href) throw new MissingWitness('未到达绑定的页面 / Bound route was not reached: '+phase.route);
+          }
           for (const step of phase.steps) {
             assertion = step.action.startsWith('expect');
             await executeStep(page, step, { requests });
@@ -115,6 +125,11 @@ export async function runBusinessJourney(browser: Browser, baseUrl: string, plan
               detail += `\n${observation.id}: ${value.unavailable}`;
             }
           }
+          for (const rule of phase.requires ?? []) {
+            const verdict=evaluateRelation(rule,facts);
+            if (verdict.status!=='pass') throw new MissingWitness(rule.name+' · '+verdict.detail);
+            detail+='\n✓ '+rule.name+' · '+verdict.detail;
+          }
           for (const rule of phase.assert ?? []) {
             const verdict = evaluateRelation(rule, facts);
             relations.push(verdict);
@@ -126,12 +141,23 @@ export async function runBusinessJourney(browser: Browser, baseUrl: string, plan
             const list = phase.list;
             const rows = await readList(page, list);
             observed = { rows, saveAs: list.saveAs, equals: list.equals, where: list.where };
+            if (list.partitionWitness) {
+              const {field,baselines}=list.partitionWitness;
+              if (rows.some(row=>!Object.hasOwn(baselines,row[field]))) throw new MissingWitness('预览包含未绑定的接收方 / Unbound recipient in preview');
+              const changed=Object.entries(baselines).some(([recipient,ref])=>{
+                const previous=snapshots.get(ref);
+                if (!previous) throw new MissingWitness('Missing recipient baseline: '+ref);
+                return rowDifferences(previous,rows.filter(row=>row[field]===recipient)).length>0;
+              });
+              if (!changed || !rows.length) throw new MissingWitness('预览与原分配缺少可辨别的变化 / No distinguishable assignment change');
+            }
             if (list.saveAs) snapshots.set(list.saveAs, rows);
             if (list.equals) {
               const baseline = snapshots.get(list.equals);
               if (!baseline) throw new Error('Referenced snapshot was not captured');
               const expected = baseline.filter(row => Object.entries(list.where ?? {}).every(([key, value]) => row[key] === value));
-              compareRows(expected, rows);
+              const differences=rowDifferences(expected,rows);
+              if (differences.length) throw new BusinessMismatch(differences.slice(0,20).map(([key,count])=>(count>0?'missing':'extra')+' ×'+Math.abs(count)+' '+key).join('\n')+(differences.length>20?'\n… '+(differences.length-20)+' more differing keys':''));
             }
             detail += `; ${rows.length} row(s) ${list.equals ? 'matched ' + list.equals : 'captured as ' + list.saveAs}`;
           }
@@ -139,7 +165,8 @@ export async function runBusinessJourney(browser: Browser, baseUrl: string, plan
         results.push({ ...where, status, detail, observed, ...(observations.size ? { observations: Object.fromEntries(observations) } : {}), ...(relations.length ? { relations } : {}) });
       } catch (error) {
         const mismatch = error instanceof BusinessMismatch;
-        results.push({ ...where, status: mismatch || assertion || status === 'fail' ? 'fail' : 'blocked', detail: error instanceof Error ? error.message : String(error), observed, ...(observations.size ? { observations: Object.fromEntries(observations) } : {}), ...(relations.length ? { relations } : {}) });
+        if (error instanceof MissingWitness) missingWitness=error.message;
+        results.push({ ...where, status: mismatch || assertion || status === 'fail' ? 'fail' : missingWitness ? 'not-verified' : 'blocked', detail: error instanceof Error ? error.message : String(error), observed, ...(observations.size ? { observations: Object.fromEntries(observations) } : {}), ...(relations.length ? { relations } : {}) });
         // Read-only list differences do not prevent observing the other recipients.
         if (mismatch) relationFailed = true;
         else stopped = true;

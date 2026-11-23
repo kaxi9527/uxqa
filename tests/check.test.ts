@@ -6,6 +6,7 @@ import { promisify } from 'node:util';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { writeBaseline } from '../src/check/baseline.js';
 import { formatPrompt, formatText } from '../src/check/format.js';
+import { cssHints } from '../src/check/hints.js';
 import { runCheck } from '../src/check/run.js';
 import { findComponents } from '../src/inventory/find.js';
 import { componentByName, readInventory } from '../src/inventory/read.js';
@@ -14,6 +15,28 @@ import { BASIC_RULES, buildRuleSet, RuleConfigError, validateAgainstInventory } 
 const exec = promisify(execFile);
 const cli = resolve('src/cli.ts');
 const FIXTURE = resolve('examples/check-fixture');
+it('recognizes the HTML hidden reset and still flags other important declarations', () => {
+  expect(cssHints('[hidden] {display:none !important}').some(h=>h.check==='important')).toBe(false);
+  for (const css of ['.card {display:none !important}', '[hidden] {color:red !important}', '[hidden] {display:none !important; color:red !important}']) {
+    expect(cssHints(css).some(h=>h.check==='important')).toBe(true);
+  }
+});
+it('counts only target files and explains library exemptions even with zero findings', async () => {
+  const result = await runCheck({source:FIXTURE, files:['src/pages/Clean.tsx','src/pages/Clean.tsx']});
+  expect(result.coverage?.directories).toEqual({'src/pages':1});
+  expect(result.filesScanned).toBe(1);
+  expect(result.coverage?.contextDirectories['src/pages']).toBeGreaterThan(0);
+  const empty = await runCheck({source:FIXTURE,files:[]});
+  expect(empty.scope).toBe('files');
+  expect(empty.filesScanned).toBe(0);
+  expect(empty.coverage?.directories).toEqual({});
+  expect(empty.coverage?.ruleSkips.every(s=>s.reason==='no-files')).toBe(true);
+  expect(formatText(result)).toContain('src/pages (1)');
+  const full = await runCheck({source:join(FIXTURE,'src/pages')});
+  expect(full.coverage?.requested).toBe('src/pages');
+  expect(Object.values(full.coverage!.directories).reduce((a,b)=>a+b,0)).toBe(full.filesScanned);
+  expect(full.coverage?.ruleSkips.some(s=>s.rule==='basic/no-hardcoded-color' && s.reason==='library')).toBe(true);
+});
 let product: string;
 
 beforeAll(async () => {

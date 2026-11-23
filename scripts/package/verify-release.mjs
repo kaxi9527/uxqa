@@ -16,7 +16,7 @@ if (args[0] === '--smoke') {
 } else if (args[0] === '--assemble') {
   const dir = args[1];
   const files = await archives(dir);
-  const expected = [`UXQA-${version}-macOS-arm64.zip`, `UXQA-${version}-macOS-x64.zip`, `uxqa-${version}-win-x64.zip`, `uxqa-${version}-linux-x64.tar.gz`, `uxqa-${version}-linux-arm64.tar.gz`].sort();
+  const expected = [`QA-Master-${version}-macOS-arm64.zip`, `QA-Master-${version}-macOS-x64.zip`, `qa-master-${version}-win-x64.zip`, `qa-master-${version}-linux-x64.tar.gz`, `qa-master-${version}-linux-arm64.tar.gz`].sort();
   if (JSON.stringify(files.map((file) => basename(file)).sort()) !== JSON.stringify(expected)) throw new Error('Release asset matrix is incomplete or has extra files');
   const out = join(dir, 'publish');
   await mkdir(out);

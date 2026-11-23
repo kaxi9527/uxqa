@@ -27,6 +27,7 @@ function renderCheckCenter(body) {
           h('span', { text: accessText('已检查 ' + round.filesScanned + ' 个文件 · ' + fresh.length + ' 项本轮新问题', 'Files checked: ' + round.filesScanned + ' · New findings: ' + fresh.length) }))
           : h('p', { class: 'muted', text: accessText('开始首次检测。设置预览地址后，还可以检查实际页面。', 'Start your first check. Add a preview URL to include the running pages.') })),
       round ? h('div', { class: 'quality-actions' }, antButton(accessText('处理检查结果', 'Review findings'), () => review('all'), fresh.length ? { type: 'primary' } : {}),
+        antButton(accessText('扫描范围', 'Scan coverage'), openRoundNotes),
         antButton(accessText('复检记录', 'Recheck history'), () => switchWorkflowTab('recheck'))) : null),
     round?.partial ? h('p', { class: 'notice warn', role: 'status', text: round.partial }) : null,
     h('div', { class: 'quality-layout' },
@@ -68,7 +69,7 @@ async function openDiagnosis(initialView = 'plan') {
       const focus = h('select', { class: 'input', 'aria-label': accessText('专项诊断目标', 'Review focus') }, knowledge.focuses.map((item) => h('option', { value: item.id, text: item.title })));
       const objective = h('textarea', { class: 'input', rows: '3', 'aria-label': accessText('本次诊断目标', 'Review objective'), placeholder: accessText('例如：减少首页的信息负担，保留现有品牌与主要任务。', 'For example: reduce visual clutter while preserving the brand and primary tasks.') });
       const error = h('p', { class: 'notice error', hidden: true, role: 'alert' });
-      append(panel, [h('h2', { text: accessText('生成专项修复方案', 'Create a focused repair plan') }), h('p', { class: 'muted', text: accessText('结合本轮问题、项目规范与内置知识，整理修复顺序和待验证项。方案保存在 UXQA 本地，不修改项目源码。', 'Combine findings, project rules and built-in guidance into a prioritized plan. It is saved locally and does not modify project source.') }),
+      append(panel, [h('h2', { text: accessText('生成专项修复方案', 'Create a focused repair plan') }), h('p', { class: 'muted', text: accessText('结合本轮问题、项目规范与内置知识，整理修复顺序和待验证项。方案保存在 QA大师 本地，不修改项目源码。', 'Combine findings, project rules and built-in guidance into a prioritized plan. It is saved locally and does not modify project source.') }),
         h('label', { class: 'workflow-field' }, accessText('诊断重点', 'Focus'), focus), h('label', { class: 'workflow-field' }, accessText('目标与约束（可选）', 'Objective and constraints (optional)'), objective), error,
         h('div', { class: 'row' }, h('button', { class: 'btn', type: 'button', onclick: () => close(false) }, accessText('取消', 'Cancel')), h('button', { class: 'btn primary', type: 'button', onclick: async (event) => {
           const button = event.currentTarget; button.disabled = true;

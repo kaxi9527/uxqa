@@ -7,6 +7,10 @@ import { fileURLToPath } from 'node:url';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const files = [['/index.html', 'index.html', 'text/html; charset=utf-8'], ['/app.css', 'app.css', 'text/css; charset=utf-8'], ['/workflow.js', 'workflow.js', 'text/javascript; charset=utf-8'], ['/access.js', 'access.js', 'text/javascript; charset=utf-8'], ['/agent.js', 'agent.js', 'text/javascript; charset=utf-8'], ['/app.js', 'app.js', 'text/javascript; charset=utf-8']];
 const entries = [];
+files.push(['/task-kanban.js','task-kanban.js','text/javascript; charset=utf-8'],['/task-kanban.css','task-kanban.css','text/css; charset=utf-8']);
+files.push(['/workflow-board.js','workflow-board.js','text/javascript; charset=utf-8']);
+files.push(['/acceptance-desk.js','acceptance-desk.js','text/javascript; charset=utf-8'],['/acceptance-desk.css','acceptance-desk.css','text/css; charset=utf-8']);
+files.push(['/workflow-board.css','workflow-board.css','text/css; charset=utf-8']);
 for (const file of ['react.production.min.js', 'react-dom.production.min.js', 'dayjs.min.js', 'antd.min.js', 'antd.css', 'antd.min.js.LICENSE.txt']) {
   const name = 'vendor/' + file;
   const type = file.endsWith('.js') ? 'text/javascript' : file.endsWith('.css') ? 'text/css' : 'text/plain';

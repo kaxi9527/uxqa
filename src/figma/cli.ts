@@ -7,7 +7,7 @@ import { writeFigmaReport } from './reports.js';
 import { validateChunk, validateConfig, validateIndex } from './validate.js';
 import { unpackCapture } from './transport.js';
 
-export const FIGMA_HELP = `UXQA Figma (read-only)
+export const FIGMA_HELP = `QA Master Figma (read-only)
   uxqa figma prepare --config <figma.json> [--out <empty-directory>]
   uxqa figma check --input <capture-directory> [--out <empty-directory>]
 
@@ -71,7 +71,7 @@ export async function runFigmaCommand(argv: string[]): Promise<number> {
     }
     const report = auditFigma(index, chunks, hashes);
     await emptyOutput(actualOut); await writeFigmaReport(report, actualOut);
-    console.log(`UXQA Figma ${report.status} / ${report.verdict}\nComponents: ${report.coverage.capturedComponents}/${report.coverage.expectedComponents}\n${JSON.stringify(report.summary)}\nHTML: ${join(actualOut, 'figma.html')}\nJSON: ${join(actualOut, 'figma.json')}\nMarkdown: ${join(actualOut, 'figma.md')}`);
+    console.log(`QA Master Figma ${report.status} / ${report.verdict}\nComponents: ${report.coverage.capturedComponents}/${report.coverage.expectedComponents}\n${JSON.stringify(report.summary)}\nHTML: ${join(actualOut, 'figma.html')}\nJSON: ${join(actualOut, 'figma.json')}\nMarkdown: ${join(actualOut, 'figma.md')}`);
     return report.verdict === 'limited-pass' && report.status === 'complete' ? 0 : 1;
-  } catch (e) { console.error(`UXQA Figma: ${e instanceof Error ? e.message : String(e)}`); return 2; }
+  } catch (e) { console.error(`QA Master Figma: ${e instanceof Error ? e.message : String(e)}`); return 2; }
 }

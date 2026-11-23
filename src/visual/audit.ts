@@ -389,6 +389,7 @@ const REUSE_SCRIPT = `(input) => {
   const shown = (e) => { const r = e.getBoundingClientRect(); const cs = getComputedStyle(e); return r.width > 0 && r.height > 0 && cs.visibility !== 'hidden' && cs.display !== 'none'; };
   const nameOf = (f) => { if (!f) return null; const t = f.type; if (!t) return f.name || null; if (typeof t === 'string') return null; return t.displayName || t.name || (t.render && (t.render.displayName || t.render.name)) || (t.type && (t.type.displayName || t.type.name)) || null; };
   const result = { total: 0, library: 0, handwritten: 0, unknown: 0, examples: [] };
+  const regions=[];
   const seen = new Set();
   for (const e of document.querySelectorAll(input.selectors.join(','))) {
     if (seen.has(e) || !shown(e) || e.closest('[data-uxqa-overlay]')) continue;
@@ -400,13 +401,18 @@ const REUSE_SCRIPT = `(input) => {
     for (let depth = 0; owner && depth < 8; depth++, owner = owner._debugOwner) {
       const name = nameOf(owner);
       if (!name) continue;
-      if (library.has(name)) { verdict = 'library'; break; }
-      if (product.has(name)) { verdict = 'handwritten'; break; }
+      if (library.has(name) || product.has(name)) {
+        verdict=library.has(name)?'library':'handwritten';
+        if(input.captureRegions && regions.length<500){
+          const r=e.getBoundingClientRect();regions.push({name,x:Math.floor(r.x+(input.doc?scrollX:0)),y:Math.floor(r.y+(input.doc?scrollY:0)),width:Math.ceil(r.width),height:Math.ceil(r.height)});
+        }
+        break;
+      }
     }
     result[verdict]++;
     if (verdict === 'handwritten' && result.examples.length < 5) result.examples.push((e.innerText || e.getAttribute('aria-label') || e.getAttribute('placeholder') || e.tagName.toLowerCase()).trim().slice(0, 16));
   }
-  return result;
+  return input.captureRegions?regions:result;
 }`;
 
 export interface PageReuse { route: string; total: number; library: number; handwritten: number; unknown: number; examples: string[] }
@@ -457,7 +463,19 @@ const STRETCH_SCRIPT = `() => {
 const STRESSED: VisualKind[] = ['text-wrap', 'text-clipped', 'overlap', 'text-overflow', 'page-overflow'];
 
 /** One screen of a checked page, kept so a vision model (or the user's own AI agent) can look at the whole page. */
-export interface PageView { route: string; width: number; image: string }
+export interface ComponentRegion {name:string;x:number;y:number;width:number;height:number}
+export interface PageView { route: string; width: number; image: string; state?:string; regions?:ComponentRegion[] }
+async function componentRegions(page:Page,documentCoordinates:boolean,reuse?:{selectors:string[];library:string[];product:string[]}):Promise<ComponentRegion[]> {
+  const owners=reuse?.selectors.length?await inPage<ComponentRegion[]>(page,REUSE_SCRIPT,{...reuse,captureRegions:true,doc:documentCoordinates}).catch(()=>[]):[];
+  const marked=await page.locator('[data-component],[data-component-name],[data-uxqa-component]').evaluateAll((elements,doc)=>
+    elements.flatMap(el=>{
+      const name=el.getAttribute('data-uxqa-component')||el.getAttribute('data-component-name')||el.getAttribute('data-component');
+      const r=el.getBoundingClientRect();
+      if(!name || !r.width || !r.height)return [];
+      return [{name:name.slice(0,150),x:Math.floor(r.left+(doc?scrollX:0)),y:Math.floor(r.top+(doc?scrollY:0)),width:Math.ceil(r.width),height:Math.ceil(r.height)}];
+    }).slice(0,500),documentCoordinates);
+  return [...marked,...owners].slice(0,500);
+}
 export interface VisualResult { violations: Violation[]; captures: Record<string, Capture>; checkedPages: number; widths: number[]; views: PageView[]; reuse: PageReuse[] }
 
 /** Widths at which a page screenshot is kept for review: desktop and phone-sized. */
@@ -525,7 +543,7 @@ export async function auditVisual(target: VisualTarget, outDir: string, options:
           if (VIEW_WIDTHS.includes(width) && views.length < 40) {
             const image = join(outDir, `view-${createHash('sha256').update(`${route}|${width}`).digest('hex').slice(0, 10)}.png`);
             const height = await inPage<number>(page, '() => document.documentElement.scrollHeight').catch(() => 900);
-            if (await page.screenshot({ path: image, fullPage: true, clip: { x: 0, y: 0, width, height: Math.min(height, VIEW_MAX_HEIGHT) } }).then(() => true, () => false)) views.push({ route, width, image });
+            if (await page.screenshot({ path: image, fullPage: true, clip: { x: 0, y: 0, width, height: Math.min(height, VIEW_MAX_HEIGHT) } }).then(() => true, () => false)) views.push({ route, width, image, state:'default',regions:await componentRegions(page,true,options.reuse) });
           }
           const issues = await inPage<RawIssue[]>(page, VISUAL_SCRIPT).catch(() => [] as RawIssue[]);
           issues.push(...await inspectQuality(page, width === WIDTHS[0]));
@@ -581,7 +599,7 @@ export async function auditVisual(target: VisualTarget, outDir: string, options:
               }
               if (width === 1440 && views.length < 40) {
                 const image = join(outDir, `view-${createHash('sha256').update(`${route}|${state}|${width}`).digest('hex').slice(0, 10)}.png`);
-                if (await page.screenshot({ path: image }).then(() => true, () => false)) views.push({ route: `${route} · ${state}`, width, image });
+                if (await page.screenshot({ path: image }).then(() => true, () => false)) views.push({ route: `${route} · ${state}`, width, image,state,regions:await componentRegions(page,false,options.reuse) });
               }
               const opened = await inPage<RawIssue[]>(page, VISUAL_SCRIPT).catch(() => [] as RawIssue[]);
               for (const issue of opened) {

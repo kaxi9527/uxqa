@@ -46,7 +46,7 @@ final class Desktop: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUI
                        let result = try? JSONSerialization.jsonObject(with: line) as? [String: String],
                        let text = result["url"], let url = URL(string: text), url.host == "127.0.0.1" {
                         self.mainOrigin = "http://127.0.0.1:\(url.port!)"
-                        _ = self.window(url: url, title: "UXQA")
+                        _ = self.window(url: url, title: self.english ? "QA Master" : "QA大师")
                     }
                 }
             }
@@ -55,15 +55,15 @@ final class Desktop: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUI
             DispatchQueue.main.async {
                 guard let self = self else { return }
                 if self.terminating { NSApp.reply(toApplicationShouldTerminate: true) }
-                else { self.error(self.english ? "The local service stopped. Reopen UXQA; your projects and check records remain on this computer." : "本地服务已退出。请重新打开 UXQA；已有项目和检测记录仍保存在本机。") }
+                else { self.error(self.english ? "The local service stopped. Reopen QA Master; your projects and check records remain on this computer." : "本地服务已退出。请重新打开 QA大师；已有项目和检测记录仍保存在本机。") }
             }
         }
         process = child
         do { try child.run() }
-        catch { self.error(english ? "The bundled runtime could not start. Extract the complete UXQA.app again." : "无法启动内置运行时，请重新解压完整的 UXQA.app。") }
+        catch { self.error(english ? "The bundled runtime could not start. Extract the complete QA Master.app again." : "无法启动内置运行时，请重新解压完整的 QA Master.app。") }
         DispatchQueue.main.asyncAfter(deadline: .now() + 25) { [weak self] in
             guard let self = self, self.windows.isEmpty, !self.terminating else { return }
-            self.error(self.english ? "Startup timed out. Close UXQA and try again." : "应用启动超时，请关闭后重试。")
+            self.error(self.english ? "Startup timed out. Close QA Master and try again." : "应用启动超时，请关闭后重试。")
         }
     }
 
@@ -71,7 +71,7 @@ final class Desktop: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUI
         let menu = NSMenu()
         let appItem = NSMenuItem()
         let appMenu = NSMenu()
-        appMenu.addItem(withTitle: english ? "Quit UXQA" : "退出 UXQA", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        appMenu.addItem(withTitle: english ? "Quit QA Master" : "退出 QA大师", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         appItem.submenu = appMenu
         menu.addItem(appItem)
         let editItem = NSMenuItem()
@@ -90,6 +90,7 @@ final class Desktop: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUI
               message.frameInfo.securityOrigin.port == URL(string: mainOrigin ?? "")?.port,
               let locale = message.body as? String, ["zh", "en"].contains(locale) else { return }
         english = locale == "en"
+        windows.first?.title = english ? "QA Master" : "QA大师"
         updateMenus()
     }
 
@@ -121,7 +122,7 @@ final class Desktop: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUI
 
     func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for action: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
         guard let url = action.request.url else { return nil }
-        if url.scheme == "http", url.host == "127.0.0.1" { return window(url: url, title: english ? "UXQA · Model connections" : "UXQA · 模型连接中心", configuration: configuration) }
+        if url.scheme == "http", url.host == "127.0.0.1" { return window(url: url, title: english ? "QA Master · Model connections" : "QA大师 · 模型连接中心", configuration: configuration) }
         if ["https", "http"].contains(url.scheme ?? "") { NSWorkspace.shared.open(url) }
         return nil
     }
@@ -153,7 +154,7 @@ final class Desktop: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUI
         return .terminateLater
     }
     func error(_ message: String) {
-        let alert = NSAlert(); alert.messageText = "UXQA"; alert.informativeText = message; alert.runModal()
+        let alert = NSAlert(); alert.messageText = english ? "QA Master" : "QA大师"; alert.informativeText = message; alert.runModal()
         NSApp.terminate(nil)
     }
 }

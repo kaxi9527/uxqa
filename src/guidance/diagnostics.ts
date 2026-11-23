@@ -1,4 +1,5 @@
 import { GUIDES } from './guides.js';
+import { coverageLines } from '../check/coverage.js';
 import { localizedGuide } from './guides.en.js';
 import { ENGLISH_DIAGNOSTIC_CASES, ENGLISH_FOCUS_TITLES } from './diagnostics.en.js';
 import { issueGuidance } from './issues.js';
@@ -72,6 +73,7 @@ export function buildDiagnosis(round: Round, projectName: string, workflow: Issu
     '项目规则和组件信息使用所选轮次的快照；配置变化后先重新检测。技术栈线索来自当前工程文件。', '',
     '## 项目约束与证据边界',
     `- 源码范围：${round.result.scope}；已扫描 ${round.result.filesScanned} 个文件。`,
+    ...coverageLines(round.result).map(line => '- ' + line),
     `- 组件库：${round.result.library.path || '尚未确认'}；组件 ${round.result.library.components}；Token ${round.result.library.tokens}。`,
     `- 技术栈线索：${context.stacks.join('、') || '未能自动确认，按项目工程说明核对'}。`,
     `- 页面截图：${round.capture?.views?.length || 0} 份；${round.partial || '访问范围以本轮报告为准，不能推断未访问状态。'}`,
@@ -90,7 +92,7 @@ export function buildDiagnosis(round: Round, projectName: string, workflow: Issu
     ...procedures.flatMap((guide) => [`### ${guide.title}`, ...DIAGNOSTIC_CASES[guide.id].map((check) => `- [ ] ${check}`), `修复方向：${guide.fix}`, `验收方法：${guide.verify}`, '']),
     ...(context.checks.length ? ['## 技术栈专项核对', ...context.checks.map((check) => `- [ ] ${check}`), ''] : []),
     '## 修复后复检',
-    '- 先确认项目原有规则、组件和业务行为，再由授权的开发者实施；UXQA 不执行源码写回。',
+    '- 先确认项目原有规则、组件和业务行为，再由授权的开发者实施；QA大师不执行源码写回。',
     `- 可用验证脚本：${context.scripts.join('、') || '未发现标准脚本，请按项目说明确认'}。本方案没有运行它们。`,
     '- 使用相同页面、数据、窗口、设备和操作复测；按问题记录证据、未通过原因或接受偏差的理由。',
     '- 将人工观察录入问题处理。重新检测只产生新证据，不自动证明全部问题已修复。',
@@ -109,6 +111,7 @@ function englishDiagnosis(round: Round, projectName: string, workflow: IssueWork
     'Project-supplied rules, existing findings, and notes below are preserved in their recorded language.', '',
     '## Project constraints and evidence limits',
     `- Source scope: ${round.result.scope}; ${round.result.filesScanned} files scanned.`,
+    ...coverageLines(round.result, 'en').map(line => '- ' + line),
     `- Component library: ${round.result.library.path || 'not confirmed'}; ${round.result.library.components} components; ${round.result.library.tokens} tokens.`,
     `- Stack clues: ${context.stacks.join(', ') || 'not automatically identified; check the project documentation'}.`,
     `- Page screenshots: ${round.capture?.views?.length || 0}; ${round.partial || 'coverage is limited to the recorded round and cannot establish unvisited states.'}`,
@@ -128,7 +131,7 @@ function englishDiagnosis(round: Round, projectName: string, workflow: IssueWork
     ...procedures.flatMap((guide) => [`### ${guide.title}`, ...ENGLISH_DIAGNOSTIC_CASES[guide.id].map((check) => `- [ ] ${check}`), `Repair direction: ${guide.fix}`, `Acceptance method: ${guide.verify}`, '']),
     ...(context.checks.length ? ['## Technology stack checks', ...context.checks.map((check) => `- [ ] ${check}`), ''] : []),
     '## Recheck after repair',
-    '- Confirm existing project rules, components, and business behavior; an authorized developer carries out changes. UXQA does not write project source.',
+    '- Confirm existing project rules, components, and business behavior; an authorized developer carries out changes. QA Master does not write project source.',
     `- Available verification scripts: ${context.scripts.join(', ') || 'none identified; check the project documentation'}. This plan has not run them.`,
     '- Retest the same pages, data, viewports, devices, and actions; record evidence, failures, or reasons for accepted deviations.',
     '- Add manual observations to issue handling. A new check supplies evidence; it does not automatically prove every issue is fixed.',

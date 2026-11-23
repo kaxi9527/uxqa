@@ -44,12 +44,15 @@ export function isScannable(file: string): boolean {
   return (SCRIPT_EXT.has(ext) || STYLE_EXT.has(ext) || COMPONENT_EXT.has(ext)) && !/\.(test|spec|stories|d)\.[^.]+$/.test(file);
 }
 
-export async function listProductFiles(root: string): Promise<string[]> {
+export async function listProductFiles(root: string, coverage?: { excludedDirectories: string[]; reachedFileLimit: boolean }): Promise<string[]> {
   const files: string[] = [];
   async function visit(dir: string): Promise<void> {
     if (files.length >= MAX_FILES) return;
     for (const entry of (await readdir(dir, { withFileTypes: true })).sort((a, b) => a.name.localeCompare(b.name))) {
-      if (entry.name.startsWith('.') || EXCLUDED_DIRS.has(entry.name) || entry.isSymbolicLink()) continue;
+      if (entry.name.startsWith('.') || EXCLUDED_DIRS.has(entry.name) || entry.isSymbolicLink() || (entry.isDirectory() && /__tests__|__mocks__/.test(entry.name))) {
+        if (coverage && entry.isDirectory()) coverage.excludedDirectories.push(toPosix(relative(root, join(dir, entry.name))));
+        continue;
+      }
       const path = join(dir, entry.name);
       if (entry.isDirectory()) { await visit(path); continue; }
       if (entry.isFile() && isScannable(path) && !/__tests__|__mocks__/.test(path)) files.push(path);
@@ -57,6 +60,7 @@ export async function listProductFiles(root: string): Promise<string[]> {
     }
   }
   await visit(root);
+  if (coverage) coverage.reachedFileLimit = files.length >= MAX_FILES;
   return files;
 }
 

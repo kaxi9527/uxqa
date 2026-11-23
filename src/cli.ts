@@ -106,7 +106,7 @@ async function main(): Promise<void> {
   catch (error) { console.error(`Could not register screenshots for cleanup: ${error instanceof Error ? error.message : String(error)}`); }
   const reports = await writeReports(result, outDir);
   const summary = summarizeRun(result);
-  console.log(`UXQA ${summary.status}: ${summary.blocking} blocking, ${summary.informational} informational`);
+  console.log(`QA Master ${summary.status}: ${summary.blocking} blocking, ${summary.informational} informational`);
   console.log(`Verdict: ${summary.verdict} (pass ${summary.checks.pass}, fail ${summary.checks.fail}, blocked ${summary.checks.blocked}, not verified ${summary.checks['not-verified']}, not applicable ${summary.checks['not-applicable']})`);
   console.log(`JSON: ${reports.jsonPath}`);
   console.log(`Markdown: ${reports.markdownPath}`);

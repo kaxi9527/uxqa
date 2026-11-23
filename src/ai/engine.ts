@@ -40,7 +40,7 @@ export async function startEngine(): Promise<Engine> {
   if (starting) return starting;
   starting = (async () => {
     const binary = process.env.UXQA_MODEL_CORE;
-    if (!binary) throw new Error('当前版本没有模型模块，请使用 UXQA 桌面应用。');
+    if (!binary) throw new Error('当前版本没有模型模块，请使用 QA大师 桌面应用。');
     await access(binary).catch(() => { throw new Error('模型模块缺失，请重新解压完整应用。'); });
     const root = join(dataDir(), 'model-core');
     await mkdir(root, { recursive: true, mode: 0o700 });

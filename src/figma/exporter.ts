@@ -4,9 +4,9 @@ import type { FigmaConfig } from './types.js';
 export function exportScripts(config: FigmaConfig, exportId: string): { index: string; collect: string } {
   const prefix = `const UXQA_CONFIG = ${JSON.stringify(config)};\nconst UXQA_EXPORT_ID = ${JSON.stringify(exportId)};\n`;
   const setup = String.raw`
-if (figma.fileKey && figma.fileKey !== UXQA_CONFIG.fileKey) throw Error('UXQA file scope mismatch');
+if (figma.fileKey && figma.fileKey !== UXQA_CONFIG.fileKey) throw Error('QA Master file scope mismatch');
 const page = await figma.getNodeByIdAsync(UXQA_CONFIG.pageId);
-if (!page || page.type !== 'PAGE') throw Error('UXQA page not found');
+if (!page || page.type !== 'PAGE') throw Error('QA Master page not found');
 await figma.setCurrentPageAsync(page);
 const meta = () => ({schemaVersion:1,exportId:UXQA_EXPORT_ID,fileKey:UXQA_CONFIG.fileKey,pageId:page.id,capturedAt:new Date().toISOString()});
 const byteLength=s=>encodeURIComponent(s).replace(/%[0-9A-F]{2}/g,'x').length;
@@ -15,7 +15,7 @@ const bounded = value => {const s=JSON.stringify(value);if(byteLength(s)<=38000)
   const dictionary=[],refs=new Map();for(const [token,count]of counts)if(token.length>7&&count>1){refs.set(token,dictionary.length);dictionary.push(JSON.parse(token));}
   const payload=s.replace(/"(?:\\.|[^"\\])*"/g,token=>refs.has(token)?'@'+refs.get(token):token);
   const packed={encoding:'uxqa-json-dictionary-v1',dictionary,payload};
-  if(byteLength(JSON.stringify(packed))>43000)throw Error('UXQA output exceeds 43000 bytes; reduce component IDs and retry (nothing was changed)');return packed;};
+  if(byteLength(JSON.stringify(packed))>43000)throw Error('QA Master output exceeds 43000 bytes; reduce component IDs and retry (nothing was changed)');return packed;};
 `;
   const index = prefix + setup + String.raw`
 const ids = page.findAllWithCriteria({types:['COMPONENT']}).map(n=>n.id).sort();
@@ -28,7 +28,7 @@ return bounded({...meta(),kind:'index',pageName:page.name,componentIds:ids,theme
 }
 
 const COLLECT = String.raw`
-if (!UXQA_IDS.length || UXQA_IDS.length>30 || new Set(UXQA_IDS).size!==UXQA_IDS.length) throw Error('UXQA needs 1–30 unique component IDs');
+if (!UXQA_IDS.length || UXQA_IDS.length>30 || new Set(UXQA_IDS).size!==UXQA_IDS.length) throw Error('QA Master needs 1–30 unique component IDs');
 const variableCache=new Map(),collectionCache=new Map(),mainCache=new Map();
 const variable=async id=>{if(!variableCache.has(id))variableCache.set(id,await figma.variables.getVariableByIdAsync(id));return variableCache.get(id);};
 const collection=async id=>{if(!collectionCache.has(id))collectionCache.set(id,await figma.variables.getVariableCollectionByIdAsync(id));return collectionCache.get(id);};

@@ -26,6 +26,7 @@ function evidencePanel(endpoint,active,suites,items,round,refresh) {
         item.diagnostics?.length ? h('details',{},h('summary',{text:t('源码规则观察','Source rule observations')+' ('+item.diagnostics.length+')'}),item.diagnostics.map(d=>h('p',{text:t(d.zh,d.en)+' · '+d.location+' · '+d.rule}))) : null,
         h('div',{class:'quality-actions'},item.url ? h('a',{href:item.url,target:'_blank',rel:'noreferrer',text:t('访问来源（联网）','Visit source (network)')}):null,
           item.count ? antButton(t('选择原文','Select passage'),()=>chooseEvidencePassage(endpoint,active,suites,item,refresh)):null,
+          item.kind==='text' && item.count?antButton(t('生成验收任务','Generate acceptance tasks'),()=>draftTasks(state.current,item,refresh)):null,
           item.image && round ? antButton(t('与本轮画面比对','Compare with round capture'),()=>compareAssuranceFrame(endpoint,round,refresh,item)):null,
           item.kind==='link'?antButton(t('关联导出或读取画板','Attach export or read board'),()=>editProjectEvidence(endpoint,active,suites,refresh,[],item.url)):null)))) : null);
 }
@@ -76,7 +77,13 @@ function editProjectEvidence(endpoint,active,suites,refresh,initialFiles=[],init
             const item=await api(endpoint+'/import',{method:'POST',body:payload});
             fill(status,t('已保存','Saved')+' · '+item.format+' · '+(item.image?t('画面','Frame'):t('原文片段 ','Passages ')+item.count),
               item.gaps.length?h('span',{text:' · '+item.gaps.slice(0,3).join(' / ')}):null,
-              item.count?antButton(t('选择原文','Select passage'),()=>{close(true);chooseEvidencePassage(endpoint,active,suites,item,refresh);}):null);
+              item.count?antButton(t('选择原文','Select passage'),()=>{close(true);chooseEvidencePassage(endpoint,active,suites,item,refresh);}):null,
+              item.kind==='text' && item.count?antButton(t('生成验收任务','Generate acceptance tasks'),()=>{close(true);draftTasks(state.current,item,refresh);}):null);
+            if(item.kind==='text' && item.count){
+              const {drafts,total}=await api(endpoint.replace(/\/assurance$/,'/acceptance-tasks/drafts'),{method:'POST',body:{source:item.id}});
+              status.append(h('details',{open:files.length===1},h('summary',{text:t('候选任务','Task candidates')+' · '+total}),
+                drafts.map(d=>h('p',{text:[d.locator,d.actor||t('角色待确认','Clarify role'),d.condition||t('条件待确认','Clarify conditions'),d.action||t('操作待确认','Clarify action'),d.expected||t('预期待确认','Clarify expectation')].join(' · ')}))));
+            }
           }catch(e){status.textContent=t('未导入 · ','Import failed · ')+e.message;}
         }
         await refresh();

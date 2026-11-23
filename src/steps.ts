@@ -7,6 +7,7 @@ export interface StepContext {
   /** Requests observed since the flow started (method upper-case, absolute URL). */
   requests: Array<{ method: string; url: string }>;
   timeoutMs?: number;
+  recovery?: { injected: boolean; recovered: boolean };
 }
 
 const LIVE_REGION = '[role="status"],[role="alert"],[role="log"],[aria-live="polite"],[aria-live="assertive"],output';
@@ -24,6 +25,25 @@ async function poll<T>(read: () => Promise<T>, accept: (value: T) => boolean, de
 export async function executeStep(page: Page, step: Step, context?: StepContext): Promise<void> {
   const timeout = context?.timeoutMs ?? 8000;
   switch (step.action) {
+    case 'beforeLanguageSwitch':
+      if ((await page.locator('html').getAttribute('lang'))?.toLowerCase() === step.lang.toLowerCase()) throw new Error('Page already uses the target language; choose the initial language in setup.');
+      return;
+    case 'firstTab':
+      await poll(() => page.locator('html').getAttribute('lang'), lang => lang?.toLowerCase() === step.lang.toLowerCase(), lang => 'Expected document language ' + step.lang + ', got ' + lang, timeout);
+      // Re-enter from the beginning of this document without reloading or losing a non-persisted locale.
+      await page.evaluate(() => {
+        const start = document.createElement('span');
+        start.tabIndex = -1;
+        document.body.prepend(start);
+        start.focus();
+        start.remove();
+      });
+      await page.keyboard.press('Tab');
+      return;
+    case 'expectRecoveryResponse':
+      await poll(async () => context?.recovery, state => !!state?.recovered,
+        state => state?.injected ? 'No successful retry response for ' + step.match : 'Configured GET fault did not trigger: ' + step.match, timeout);
+      return;
     case 'keyboard': await page.keyboard.press(step.key); return;
     case 'expectUrl':
       await poll(async () => page.url(), (url) => matchesUrl(step.url, url), (url) => `Expected URL ${step.url}, got ${url}`, timeout);
@@ -57,6 +77,7 @@ export async function executeStep(page: Page, step: Step, context?: StepContext)
     case 'selectOption': await locator.selectOption(step.value); break;
     case 'waitFor':
     case 'expectVisible': await locator.waitFor({ state: 'visible' }); break;
+    case 'waitForHidden':
     case 'expectHidden': await locator.waitFor({ state: 'hidden' }); break;
     case 'expectText':
       await poll(

@@ -1,4 +1,5 @@
 import type { CheckResult, Violation } from './run.js';
+import { coverageLines } from './coverage.js';
 import { issueGuidance } from '../guidance/issues.js';
 
 const LEVEL_WORD: Record<Violation['level'], string> = { must: '需要改', default: '建议改', reference: '可以看看' };
@@ -24,7 +25,7 @@ export function formatText(result: CheckResult, options: { limit?: number } = {}
     const counts = [result.summary.newMust && `${result.summary.newMust} 个需要改`, result.summary.newDefault && `${result.summary.newDefault} 个建议改`, result.summary.newReference && `${result.summary.newReference} 个可以看看`].filter(Boolean).join('，');
     lines.push(`发现 ${fresh.length} 个新问题（${counts}）。${where}。`);
   }
-  lines.push(library);
+  lines.push(library, ...coverageLines(result));
   if (result.baseline && (result.summary.baseline || result.baseline.fixed)) {
     lines.push(`老问题：${result.summary.baseline} 个已记录在基线里，这次不算${result.baseline.fixed ? `；有 ${result.baseline.fixed} 个老问题本轮未再检出，需结合覆盖范围确认` : ''}。`);
   }
@@ -94,7 +95,7 @@ function promptAfter(result: CheckResult, problems: Violation[]): string[] {
 /** Instructions for a coding agent, readable by a beginner: what to fix, where, how, and how to confirm. */
 export function formatPrompt(result: CheckResult, options: { limit?: number } = {}): string {
   const fresh = reviewOrder(result.violations.filter((violation) => violation.status === 'new'));
-  if (!fresh.length) return '这一轮没有需要修改的问题。\n';
+  if (!fresh.length) return ['这一轮没有需要修改的问题。', ...coverageLines(result), ''].join('\n');
   const limit = options.limit ?? 50;
   const shown = fresh.slice(0, limit);
   const counts = (['must', 'default', 'reference'] as const).map((level) => [level, shown.filter((violation) => violation.level === level).length] as const).filter(([, count]) => count);
@@ -102,6 +103,7 @@ export function formatPrompt(result: CheckResult, options: { limit?: number } = 
     `请帮我修改这个项目（${result.productRoot}）的前端代码，解决下面 ${shown.length} 个问题（${counts.map(([level, count]) => `${PRIORITY[level].slice(1, -1)} ${count} 个`).join('，')}）。先改标着【需要改】的。`,
     '',
     ...promptRules(result.library.path),
+    ...coverageLines(result),
   ];
   shown.forEach((violation, index) => { lines.push('', ...promptBlock(violation, index + 1)); });
   if (fresh.length > limit) lines.push('', `（还有 ${fresh.length - limit} 个问题没列出来，先改完这些，再检测一次。）`);

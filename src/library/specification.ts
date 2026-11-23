@@ -9,6 +9,6 @@ export function specification(component: ComponentDefinition, productId: string)
     '## Accessibility','',...component.accessibility.map((entry)=>`- ${entry}`),'','## Usage','',...component.usage.map((entry)=>`- ${entry}`),'',
     '## Avoid','',...component.antiUsage.map((entry)=>`- ${entry}`),'','## Implementation','',...component.implementation.map((entry)=>`- ${entry}`),'',
     '## Consumers','',...component.consumers.map((entry)=>`- ${entry}`),'',
-    'Local UXQA checks do not replace the product component-library approval process.',''];
+    'Local QA Master checks do not replace the product component-library approval process.',''];
   return lines.join('\n');
 }
