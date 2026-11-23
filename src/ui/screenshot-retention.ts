@@ -4,7 +4,7 @@ import { dataDir, shotsDir, type Round } from './store.js';
 import { cleanExportedScreenshots } from './exported-screenshot-retention.js';
 
 export const SCREENSHOT_RETENTION_MS = 48 * 60 * 60 * 1000;
-const GENERATED_IMAGE = /^(?:page-[a-z0-9-]+-[a-f0-9]{6}|issue-\d+-[a-z0-9-]+-[a-f0-9]{6}|(?:view|visual|change)-[a-f0-9]{10})\.png$/i;
+export const GENERATED_IMAGE = /^(?:page-[a-z0-9-]+-[a-f0-9]{6}|issue-\d+-[a-z0-9-]+-[a-f0-9]{6}|(?:view|visual|change)-[a-f0-9]{10})\.png$/i;
 const ROUND_DIRECTORY = /^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z-shots$/;
 const MANIFEST = '.expired-screenshots.json';
 
@@ -20,14 +20,15 @@ export async function expiredScreenshotNames(projectId: string, roundId: string)
 }
 
 /** Remove only UXQA-generated PNGs from managed round directories, never exports or project files. */
-export async function cleanExpiredScreenshots(now = Date.now()): Promise<number> {
+export async function cleanExpiredScreenshots(now = Date.now(), onlyProject?: string): Promise<number> {
   const root = join(dataDir(), 'rounds');
   const projects = await readdir(root, { withFileTypes: true }).catch((error: NodeJS.ErrnoException) => {
     if (error.code === 'ENOENT') return [];
     throw error;
   });
-  let removed = await cleanExportedScreenshots(now - SCREENSHOT_RETENTION_MS);
+  let removed = onlyProject ? 0 : await cleanExportedScreenshots(now - SCREENSHOT_RETENTION_MS);
   for (const project of projects) {
+    if (onlyProject && project.name !== onlyProject) continue;
     if (!project.isDirectory() || !/^[a-f0-9]{12}$/.test(project.name)) continue;
     for (const round of await readdir(join(root, project.name), { withFileTypes: true })) {
       if (!round.isDirectory() || !ROUND_DIRECTORY.test(round.name)) continue;

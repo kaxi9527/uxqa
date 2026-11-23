@@ -1,6 +1,8 @@
-<p align="center"><img src="assets/icon-256.png" width="112" alt="UXQA interface inspector"></p>
+<p align="center"><img src="assets/icon-256.png" width="112" alt="QA Master interface inspector"></p>
 
-# UXQA
+# QA Master · QA大师
+
+Previously UXQA. Existing installations keep the `uxqa` command, project settings and local data directory. 新名称为 QA大师（QA Master）；早期下载包和应用使用原名 UXQA。
 
 **Check the UI your AI built. Keep the evidence on your computer.**
 
@@ -10,12 +12,12 @@
  · [预览版专项检测 / Preview check workflows](docs/assurance-workflows.md)
  · [中文使用说明](docs/product-guide.zh-CN.md) · [English user guide](docs/product-guide.en.md) · [更新说明 / Release notes](docs/release-notes.zh-CN.md)
 
-UXQA 是一个本地运行的界面检查工具：检查组件复用、页面溢出与可访问性，保存截图和复现证据，并可选择连接模型做看图复核。模型接入中心把协议配置、订阅登录和账号管理放在同一个产品里。
+QA大师 是一个本地运行的界面检查工具：检查组件复用、页面溢出与可访问性，保存截图和复现证据，并可选择连接模型做看图复核。模型接入中心把协议配置、订阅登录和账号管理放在同一个产品里。
 
-If UXQA helps you ship a better interface, a ⭐ helps others find it. Bug reports,
+If QA Master helps you ship a better interface, a ⭐ helps others find it. Bug reports,
 docs and small, well-tested PRs are equally welcome.
 
-<img src="assets/model-center.png" width="960" alt="UXQA model access center with a synthetic local provider and subscription sign-in controls">
+<img src="assets/model-center.png" width="960" alt="QA Master model access center with a synthetic local provider and subscription sign-in controls">
 
 *模型接入中心预览，使用合成测试数据。 / Model access center with synthetic fixture data.*
 
@@ -30,18 +32,18 @@ It runs Chromium through Playwright, checks page health and failed requests, eva
 **首次使用请看 [安装与使用说明](docs/install-and-use.md)**：选哪个包、Mac / Windows / Linux 解压启动、首次打开提示、第一次检测、更新卸载和常见故障。直接通过 GitHub 下载即可，无需应用商店。
 
 Download a versioned archive from [Releases](https://github.com/kaxi9527/uxqa/releases).
-Node and the UXQA model module are included; no separate Node installation is needed.
+Node and the QA Master model module are included; no separate Node installation is needed.
 The interface offers Chinese and English. The project repair conversation is available in 0.5.2 and later; earlier releases may differ.
 
 | Computer | Download from Releases | Start |
 | --- | --- | --- |
-| macOS 14+, Apple Silicon | [macOS arm64](https://github.com/kaxi9527/uxqa/releases) | Open `UXQA.app` |
-| macOS 14+, Intel | [macOS x64](https://github.com/kaxi9527/uxqa/releases) | Open `UXQA.app` |
+| macOS 14+, Apple Silicon | [macOS arm64](https://github.com/kaxi9527/uxqa/releases) | Open `QA Master.app` |
+| macOS 14+, Intel | [macOS x64](https://github.com/kaxi9527/uxqa/releases) | Open `QA Master.app` |
 | Windows 11+, x64 | [Windows x64](https://github.com/kaxi9527/uxqa/releases) | `Open uxqa console.cmd` |
 | Linux x64, glibc (Ubuntu 22.04/24.04 recommended) | [Linux x64](https://github.com/kaxi9527/uxqa/releases) | `./open-uxqa-console.sh` |
 | Linux ARM64, glibc | [Linux arm64](https://github.com/kaxi9527/uxqa/releases) | `./open-uxqa-console.sh` |
 
-macOS opens a native window. Windows/Linux open the same local UXQA console in your
+macOS opens a native window. Windows/Linux open the same local QA Master console in your
 browser; keep the launcher terminal open and press Ctrl+C to quit. Windows ARM64
 has no native package in this release. Linux musl/Alpine is not a supported binary target.
 Screenshot capture follows [Playwright's supported operating systems](https://playwright.dev/docs/intro#system-requirements);
@@ -142,7 +144,7 @@ Known limits: rendered-page/source matching is heuristic, and similar-structure 
 
 ## Local Console (`uxqa ui`)
 
-UXQA organizes work as **项目 → 检查 → 问题处理 → 复检**.
+QA大师 organizes work as **项目 → 检查 → 问题处理 → 复检**.
 Native quality knowledge drives UI / UX / experience classification, screenshot
 diagnosis, repair instructions and verification. Seven additional browser rules
 inspect structure, accessible names, field labels and motion behavior. No external
@@ -295,6 +297,24 @@ Relative storageState paths resolve beside the scenario JSON, not the shell dire
 
 ## Acceptance Results
 
+For source-backed checks in the desktop app, open **Workflow → Acceptance tasks → Create a check from this requirement**. The CLI accepts the same bindings in `requirementChecks` alongside `journeys`, with a literal `requirement` and a `kind` of `setting-propagation`, `role-outcomes` or `return-state`. See the bilingual product guides above for the evidence required by each.
+
+Browser configs accept a `scenarios` array alongside `flows`. Each binding runs the built-in sequence on its declared route and viewport. Optional `setup` accepts ordinary flow steps. Use test data for save actions. For a native language select, add `"option": "en"`; omit `retry` for an automatic retry. Targets support the same role, label, text, test ID or CSS locators as ordinary flows.
+
+```json
+{
+  "baseUrl": "http://127.0.0.1:3000",
+  "routes": ["/items"],
+  "scenarios": [
+    {"type":"failure-recovery","route":"/items","request":"**/api/items","error":{"css":"#error"},"ready":{"css":"#items"},"retry":{"role":"button","name":"Retry"}},
+    {"type":"save-focus","route":"/items","save":{"role":"button","name":"Save"},"saved":{"text":"Changes saved","exact":true},"continuation":{"role":"button","name":"Edit"}},
+    {"type":"language-entry","route":"/items","switcher":{"role":"button","name":"English"},"lang":"en","entry":{"role":"link","name":"Skip to main content"}}
+  ]
+}
+```
+
+`uxqa check` reports target directories and file counts, context-only directories, and rule exclusions. `uxqa run` reports page coverage and skipped or incomplete checks in both JSON and Markdown. Missing scenario bindings remain unverified.
+
 Every run records check results using the shared acceptance standard's vocabulary: `pass` 通过, `fail` 失败, `blocked` 阻塞, `not-verified` 未验证, `not-applicable` 不适用. `report.json` holds them in `checks` together with `evidence` (time, base URL, environment label, data nature, product revision and dirty files, browser, Node and platform). `summary.verdict` is `fail`, `blocked`, `pass-with-gaps` or `pass`. The CLI exits 1 for `fail` or `blocked`.
 
 Automated checks, per route and viewport unless noted:
@@ -335,7 +355,7 @@ The audit integrates these pinned upstream tools:
 | [react-scanner](https://github.com/moroshko/react-scanner) | 1.2.0 | Existing React component usage, aliases, props and locations |
 | [Project Wallace CSS Analyzer](https://github.com/projectwallace/css-analyzer) | 9.9.3 | CSS complexity, uniqueness and token metrics |
 
-UXQA compares bounded DOM structures at the same viewport across routes, captures element screenshots, and lists observed style differences as possible component variants. Flow steps can expose dialog or tab states for additional sampling. Dembrandt reuses the existing Playwright browser download and receives the configured login state. Use `--no-design-tokens` for a faster structural audit, or `--selector` to focus sampling on specific controls.
+QA Master compares bounded DOM structures at the same viewport across routes, captures element screenshots, and lists observed style differences as possible component variants. Flow steps can expose dialog or tab states for additional sampling. Dembrandt reuses the existing Playwright browser download and receives the configured login state. Use `--no-design-tokens` for a faster structural audit, or `--selector` to focus sampling on specific controls.
 
 Reports are `components.html`, `components.json`, and `components.md`. They include candidates, route/state/viewport coverage, screenshot evidence, tool versions, raw tool reports, source clone locations, existing React usage, and explicit limitations. Failed tools or states produce a partial report and exit 1. Usage/configuration errors exit 2; completed analysis exits 0 even when it suggests component candidates.
 
@@ -368,13 +388,13 @@ For a custom layout, declare an existing library in the product's `.uxqa/library
 
 Paths are relative to the product package root. `--library` can select a discovered library when multiple catalogs exist, but may not conflict with an explicit product declaration or escape the product root. Unsupported dynamic catalogs require a product-specific adapter; no library or external account is created automatically.
 
-[examples/component-definition.json](examples/component-definition.json) shows the required specification and verification contract. Planning writes an execution plan and draft spec only in the run artifacts. UXQA does not automatically refactor code based on structural similarity. Implementation belongs to the current product task, using that product's components and Tokens.
+[examples/component-definition.json](examples/component-definition.json) shows the required specification and verification contract. Planning writes an execution plan and draft spec only in the run artifacts. QA Master does not automatically refactor code based on structural similarity. Implementation belongs to the current product task, using that product's components and Tokens.
 
 `component-sync` requires the planned component export in the bound library and consumers that render an import from it. It runs existing named package test/typecheck scripts and the configured browser scenario with a visible-result assertion and interaction screenshot. Scripts must be authorized local test commands. Source/acceptance inputs are checked for drift before writing; failures leave evidence and refuse sync. New registration uses a per-library lock, appends a new record, creates a new spec under the library's `specs/`, then checks both by readback. Existing spec files are never replaced. Run outputs must stay outside the product source tree.
 
 To explicitly revise a supported JSON record, add `"operation":"revise"` to the definition and use the same `component-plan` → `component-sync` commands. Finish the implementation before preparing this revision plan: it binds the exact existing id/name/product, original specification, catalog and product source hashes. Missing or ambiguous identities and unsupported formats are refused. All test/typecheck/browser/screenshot, drift and lock gates still run. A successful revision preserves unrelated entries and custom metadata, updates the named contract, writes a uniquely named revision spec and retains the original spec. Evidence includes the before/after catalog, original specification and revision receipt. A failed post-write readback restores only the tool's exact catalog write; a concurrent foreign change is never overwritten and requires recovery from retained evidence. This operation does not grant another product's approval or release authority.
 
-SynNovator records remain `candidate-needs-evidence` after UXQA's local verification; its own independent approval/governance gates still decide formal approval. JSON adapters use `verified-local`. A sync receipt is evidence of local catalog/spec registration, not release acceptance. All product-specific rules and identity guards remain mandatory.
+SynNovator records remain `candidate-needs-evidence` after QA Master's local verification; its own independent approval/governance gates still decide formal approval. JSON adapters use `verified-local`. A sync receipt is evidence of local catalog/spec registration, not release acceptance. All product-specific rules and identity guards remain mandatory.
 
 Verification snapshots hash every eligible input, including native authority manifests, with limits of 2 MB per file, 32 MB total and 2000 files. This allows larger catalogs without omitting them from drift checks. These hashing limits are separate from the narrower parser limits used by source component audits.
 

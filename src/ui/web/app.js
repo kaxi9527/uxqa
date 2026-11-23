@@ -190,7 +190,7 @@ function browserSheet(info, { purpose = 'check' } = {}) {
     const skipText = purpose === 'login' ? accessText('先不下', 'Not now') : accessText('先不下，只检查源码', 'Not now, check source only');
     const ask = () => fill(panel,
       h('h2', { text: title }),
-      h('p', { text: accessText('uxqa 要用一个浏览器打开你的页面。它比较大，所以没有放进安装包，第一次用到时才下载，下载前先问你。', 'UXQA uses a browser to open your pages. It is downloaded separately when first needed, with your permission.') }),
+      h('p', { text: accessText('uxqa 要用一个浏览器打开你的页面。它比较大，所以没有放进安装包，第一次用到时才下载，下载前先问你。', 'QA Master uses a browser to open your pages. It is downloaded separately when first needed, with your permission.') }),
       browserFacts(info),
       h('div', { class: 'notice', role: 'note', text: purpose === 'login' ? accessText('不下载的话，也可以在"页面地址"里填一个已有的登录状态文件。', 'You can instead enter an existing login state file under Page URLs.') : accessText('不下载也可以：源码检查照常进行，只是这一轮没有截图和页面检查。', 'You can continue with source checks; this round will not include screenshots or page checks.') }),
       h('div', { class: 'row' }, h('span', { class: 'grow' }),
@@ -237,7 +237,7 @@ async function renderBrowserPanel(panel) {
     return;
   }
   fill(panel, h('h2', { text: accessText('浏览器组件', 'Browser component') }),
-    h('p', { class: 'muted', text: accessText('还没有下载。只检查源码不需要它；要截图和检查页面时才需要，下载前会先问你。', 'Not downloaded. Source checks do not need it; screenshots and page checks do. UXQA asks before downloading.') }),
+    h('p', { class: 'muted', text: accessText('还没有下载。只检查源码不需要它；要截图和检查页面时才需要，下载前会先问你。', 'Not downloaded. Source checks do not need it; screenshots and page checks do. QA Master asks before downloading.') }),
     browserFacts(info),
     h('div', { class: 'row' }, h('span', { class: 'grow' }), h('button', { class: 'btn', type: 'button', onclick: async () => { await browserSheet(info, { purpose: 'settings' }); renderBrowserPanel(panel); } }, accessText('查看并下载', 'Review and download'))));
 }
@@ -275,7 +275,7 @@ function project() { return state.projects.find((entry) => entry.id === state.cu
 function renderRail() {
   const rail = document.getElementById('rail');
   fill(rail,
-    h('div', { class: 'rail-head' }, h('img', { class: 'logo', src: '/icon.png', alt: '' }), h('span', { class: 'brand' }, 'UXQA', h('small', { text: accessText('UI / UX / 体验检查', 'UI / UX / experience review') }))),
+    h('div', { class: 'rail-head' }, h('img', { class: 'logo', src: '/icon.png', alt: '' }), h('span', { class: 'brand' }, accessText('QA大师','QA Master'), h('small', { text: accessText('UI / UX / 体验检查', 'UI / UX / experience review') }))),
     h('div', { class: 'rail-label', text: accessText('项目', 'Projects') }),
     h('div', { class: 'rail-list' }, state.projects.length ? state.projects.map((entry) => {
       const last = entry.lastRound;
@@ -332,7 +332,7 @@ function openAddProject() {
           h('div', { class: 'field' },
             h('label', { for: 'add-preview', text: accessText('本地预览地址（可不填）', 'Local preview URL (optional)') }),
             h('input', { id: 'add-preview', class: 'input', type: 'text', inputmode: 'url', placeholder: 'localhost:5173', autocomplete: 'off', value: preview, oninput: (event) => { preview = event.target.value; } }),
-            h('span', { class: 'hint', text: accessText('不填也行：添加后会自动去找这个项目在本机的预览地址。', 'If omitted, UXQA looks for a running local preview after adding the project.') })),
+            h('span', { class: 'hint', text: accessText('不填也行：添加后会自动去找这个项目在本机的预览地址。', 'If omitted, QA Master looks for a running local preview after adding the project.') })),
           h('div', { class: 'row' }, h('span', { class: 'grow' }), h('button', { class: 'btn primary', type: 'submit' }, accessText('添加', 'Add')))));
     };
     const scan = () => {
@@ -381,11 +381,11 @@ async function loadProjects() {
   renderRail();
 }
 
-async function selectProject(id) {
+async function selectProject(id, initialTab = 'checks') {
   resetFindingFilters();
-  Object.assign(state, { global: false, current: id, tab: 'checks', repairMode: 'chat', workflow: { dispositions: {}, observations: [] }, round: null, rounds: [], library: null, error: '' });
+  Object.assign(state, { global: false, current: id, tab: initialTab, repairMode: 'chat', workflow: { dispositions: {}, observations: [] }, round: null, rounds: [], library: null, error: '' });
   renderRail();
-  renderWorkspace();
+  fill(document.getElementById('workspace'), h('p', { class: 'content muted', role: 'status', text: accessText('正在打开项目…', 'Opening project…') }));
   try {
     const [library, rounds] = await Promise.all([api(`/projects/${id}/library`), api(`/projects/${id}/rounds`)]);
     state.library = library;
@@ -396,7 +396,7 @@ async function selectProject(id) {
 }
 
 // ---------- workspace ----------
-const TABS = [['checks', '检查', 'Check'], ['issues', '问题处理', 'Issues'], ['agent', '修复对话', 'Repair chat'], ['recheck', '复检', 'Recheck'], ['components', '组件库', 'Components'], ['rules', '项目规范', 'Project rules'], ['settings', '预览设置', 'Preview settings']];
+const TABS = [['checks', '检查', 'Check'], ['board', '工作流', 'Workflow'], ['issues', '问题处理', 'Issues'], ['agent', '修复对话', 'Repair chat'], ['recheck', '复检', 'Recheck'], ['components', '组件库', 'Components'], ['rules', '项目规范', 'Project rules'], ['settings', '预览设置', 'Preview settings']];
 
 function rememberPlace() {
   const query = new URLSearchParams();
@@ -451,7 +451,7 @@ function renderGlobal(workspace) {
       h('p', {}, accessText('项目列表、检测记录和 AI 设置保存在这台电脑的 ', 'Project lists, check records and AI settings are stored on this computer at '), h('code', { class: 'mono', text: info.home }), accessText(' 里，不会写进你的项目。启用 AI 看图后，截图会发送给你选择的模型服务。', ', outside your project. Optional AI review sends screenshots to your chosen model provider.')),
       h('p', { class: 'faint', text: accessText('应用截图和已登记的命令行截图保留 48 小时。运行时定期清理，关闭期间到期的在下次运行时清理；检查记录和手动另存的副本保留。', 'App screenshots and registered CLI screenshots are kept for 48 hours. Cleanup runs periodically and catches up on the next launch; check records and manually saved copies remain.') }),
       retention,
-      h('p', { class: 'faint', text: accessText('保存项目规则、基线或执行组件同步时，UXQA 会按对应操作提示写入项目。', 'Saving project rules or baselines, or running component sync, can write to your project as explained by each action.') }));
+      h('p', { class: 'faint', text: accessText('保存项目规则、基线或执行组件同步时，QA大师 会按对应操作提示写入项目。', 'Saving project rules or baselines, or running component sync, can write to your project as explained by each action.') }));
     api('/screenshot-retention').then((status) => {
       if (!retention.isConnected) return;
       fill(retention, status.error ? h('p', { class: 'notice error', text: accessText(`截图清理失败，下次会重试：${status.error}`, `Screenshot cleanup failed and will be retried: ${status.error}`) }) : h('p', { class: 'faint', text: accessText(`截图清理最近检查：${timeText(status.checkedAt)}`, `Screenshot cleanup last checked: ${timeText(status.checkedAt)}`) }));
@@ -470,13 +470,13 @@ function renderWorkspace() {
       h('p', { class: 'muted', text: accessText('检查项目，把发现的问题分成 UI、UX 和体验，结合证据处理，再复检。内置规则与知识在本地运行，AI 看图按需连接。普通检查只读项目代码。', 'Check a project, classify UI, UX and experience issues, work from evidence, then recheck. Built-in rules run locally; AI image review is optional. Ordinary checks read project source without changing it.') }),
       h('ol', { class: 'steps' },
         step(1, accessText('添加项目', 'Add a project'), accessText('填写项目文件夹，或按需扫描 ~/Projects。', 'Enter a project folder or scan ~/Projects on request.'), h('button', { class: 'btn', type: 'button', onclick: openAddProject }, icon('plus'), accessText('自己选文件夹', 'Choose a folder'))),
-        step(2, accessText('预览地址（自动找）', 'Preview URL (discovered automatically)'), accessText('添加时会自动找项目在本机跑着的地址；没跑起来会告诉你用哪条命令启动。有了地址，问题就能配上截图。', 'UXQA looks for a running local preview. A preview lets checks attach screenshots.')),
+        step(2, accessText('预览地址（自动找）', 'Preview URL (discovered automatically)'), accessText('添加时会自动找项目在本机跑着的地址；没跑起来会告诉你用哪条命令启动。有了地址，问题就能配上截图。', 'QA Master looks for a running local preview. A preview lets checks attach screenshots.')),
         step(3, accessText('检查并修复', 'Check and repair'), accessText('查看问题后，点「让 AI 修」和项目的模型讨论，改完再复检。', 'Review a finding and select Ask AI to repair to discuss it with the project model, then recheck.'))))));
     return;
   }
   const library = state.library;
   const chip = !library ? h('span', { class: 'chip', text: accessText('正在读取组件库…', 'Loading component library…') })
-    : library.library ? h('span', { class: 'chip ok', title: accessText(`组件库目录：${library.library}`, `Component library: ${library.library}`), text: accessText(`组件库 · ${library.components} 个组件`, `Components · ${library.components}`) })
+    : library.library ? h('span', { class: library.components ? 'chip ok' : 'chip warn', title: accessText(`组件库目录：${library.library}`, `Component library: ${library.library}`), text: library.components ? accessText(`组件库 · ${library.components} 个组件`, `Components · ${library.components}`) : accessText('未识别到可映射组件', 'No mappable components identified') })
       : h('span', { class: 'chip warn', text: accessText('没有找到组件库', 'No component library found') });
   const nav = h('div', { class: 'nav', role: 'tablist', 'aria-label': accessText('项目功能', 'Project features') }, TABS.map(([id, label, english]) => h('button', {
     type: 'button', role: 'tab', id: `tab-${id}`, 'aria-selected': state.tab === id ? 'true' : 'false', tabindex: state.tab === id ? '0' : '-1',
@@ -506,7 +506,21 @@ function renderWorkspace() {
     if (active) nav.scrollLeft = Math.max(0, active.getBoundingClientRect().right - nav.getBoundingClientRect().right + 8);
   }
   if (state.tab === 'checks') renderCheckCenter(body);
+  if (state.tab === 'board') {
+    const flow=h('div',{}),key='uxqa.workflow-view.'+state.current;
+    const view=sessionStorage.getItem(key)==='plan'?'plan':'status';
+    const views=h('div',{class:'flow-modes',role:'group','aria-label':accessText('工作流视图','Workflow view')},
+      [['status','状态看板','Status board'],['plan','流程编排','Workflow builder']].map(([id,zh,en])=>h('button',{type:'button','aria-pressed':String(id===view),
+        text:accessText(zh,en),onclick:()=>{sessionStorage.setItem(key,id);renderWorkspace();document.querySelector('.board-views [aria-pressed="true"]')?.focus();}})));
+    const tools=h('div',{class:'task-tools'},
+      antButton(accessText('验收任务','Acceptance tasks'),()=>taskDesk(state.current)),
+      antButton(accessText('项目存储','Project storage'),()=>storageDesk(state.current)),
+      state.round?antButton(accessText('记录漏检','Report a missed issue'),()=>quickTaskFeedback(state.current,'round',state.round.id,'usability')):null);
+    append(body,[h('div',{class:'board-views'},views,tools),flow]);
+    if(view==='status')renderTaskKanban(flow);else renderWorkflowBoard(flow);
+  }
   if (state.tab === 'issues') renderIssues(body);
+  if (state.tab === 'issues' && state.round) failedTaskActions(topbar,state.current,state.round.id);
   if (state.tab === 'agent') renderProjectAgent(body);
   if (state.tab === 'recheck') renderRecheck(body);
   if (state.tab === 'components') renderComponents(body);
@@ -756,7 +770,7 @@ function issueList(fresh, filtered, numbered, choose) {
   const review = state.review || { mode: 'off', pending: 0 };
   const reviewBar = !review.pending ? null
     : review.mode === 'api' ? h('div', { class: 'tip' }, h('span', { class: 'grow', text: accessText(`有 ${review.pending} 项截图还没让 AI 看过。AI 会再看一遍，确认问题是不是真的，并找程序漏掉的问题。`, `${review.pending} screenshots are ready for AI review of existing and potentially missed findings.`) }), h('button', { class: 'btn small primary', type: 'button', onclick: startReview }, accessText('AI 看图复核', 'AI image review')))
-    : review.mode === 'agent' ? h('div', { class: 'tip' }, h('span', { class: 'grow' }, accessText(`有 ${review.pending} 项截图等你的 AI 助手复核：在 Claude Code、Codex 等里说“用 uxqa 复核截图”。`, `${review.pending} screenshots are ready for review. Ask your connected assistant to review them with UXQA.`)))
+    : review.mode === 'agent' ? h('div', { class: 'tip' }, h('span', { class: 'grow' }, accessText(`有 ${review.pending} 项截图等你的 AI 助手复核：在 Claude Code、Codex 等里说“用 uxqa 复核截图”。`, `${review.pending} screenshots are ready for review. Ask your connected assistant to review them with QA Master.`)))
     : null;
   const levels = [['all', accessText('全部', 'All'), fresh.length], ...['must', 'default', 'reference'].map((level) => [level, LEVEL[level], fresh.filter((item) => item.level === level).length])];
   const list = h('div', { class: 'issues', role: 'listbox', 'aria-label': accessText('问题列表', 'Issue list'), onkeydown: (event) => {
@@ -967,6 +981,14 @@ function detailPane(violation, filtered, numbered, selectIssue) {
           h('span', { class: 'where mono ellipsis', title: violation.file }, icon('file'), violation.line ? `${violation.file}:${violation.line}` : violation.file))),
       h('div', { class: 'detail-actions' },
         antButton(accessText('讨论并修复', 'Discuss and repair'), () => openProjectAgent(violation), { id: 'discuss-finding', type: 'primary' }),
+        antButton(accessText('加入任务看板','Add to task board'),async()=>{
+          const projectId=state.current;
+          if(await newKanbanTask(projectId,violation,state.round.id) && state.current===projectId){
+            sessionStorage.setItem('uxqa.workflow-view.'+projectId,'status');switchWorkflowTab('board');
+          }
+        }),
+        antButton(accessText('关联任务修复','Repair with a task'),()=>taskDesk(state.current,null,null,violation.fingerprint,state.round.id)),
+        antButton(accessText('体验反馈','Experience feedback'),()=>quickTaskFeedback(state.current,violation.fingerprint,state.round.id,violation.quality?.suite||'usability')),
         h('button', { class: 'btn small', type: 'button', onclick: () => copy(findingPrompt(violation), accessText('这一条的修复提示', 'repair prompt')) }, icon('copy'), accessText('复制提示词', 'Copy prompt')))),
     violation.origin === 'manual' ? h('div', { class: 'notice', text: accessText('这条问题来自项目级人工观察。请按记录的操作重现；尚未关联自动截图证据。', 'This is a manual project observation. Reproduce the recorded steps; no automatic screenshot evidence is attached.') }) : stage(number, capture),
     accessText(false, !violation.english && violation.origin !== 'manual') ? h('div', { class: 'notice', text: 'This saved finding is shown in its original language. Run a new check for the latest available English descriptions.' }) : null,
@@ -1052,6 +1074,7 @@ function openRoundNotes() {
   const result = round.result;
   const sections = [];
   const section = (title, items) => sections.push(h('div', { class: 'stack' }, h('h3', { text: title }), h('ul', { class: 'list-plain' }, items.map((item) => h('li', { text: item })))));
+  section(accessText('扫描范围与跳过规则', 'Scan coverage and skipped rules'), round.coverageLines || []);
   section(accessText('这一轮', 'This round'), [accessText(`检查了 ${result.filesScanned} 个文件，用时 ${(round.durationMs / 1000).toFixed(1)} 秒`, `Checked ${result.filesScanned} files in ${(round.durationMs / 1000).toFixed(1)} seconds`), accessText(`${round.newMust} 个需要改，${round.newDefault} 个建议改，${round.newReference} 个可以看看`, `${round.newMust} must fix, ${round.newDefault} should fix, ${round.newReference} advisory`), accessText(`老问题（已记录）${round.baseline} 个`, `${round.baseline} baseline findings`)]);
   const ignored = result.violations.filter((violation) => violation.status === 'ignored');
   if (ignored.length) section(accessText('已按注释忽略', 'Ignored by comments'), ignored.map((violation) => `${violation.file}:${violation.line} ${violation.name} — ${accessText('理由', 'Reason')}: ${violation.ignoreReason}`));
@@ -1074,7 +1097,7 @@ async function recordBaseline() {
     title: accessText('把现在的问题记为老问题？', 'Record current findings as a baseline?'),
     body: h('div', { class: 'stack' },
       h('p', { text: accessText('会在项目里写入一个文件：.uxqa/baseline.json。以后检测只把新出现的问题算进来，老问题单独计数；未再检出时仍需结合覆盖范围确认修复。', 'This writes .uxqa/baseline.json in the project. Existing findings are counted separately in future checks; absence from a later check still requires coverage review.') }),
-      h('p', { class: 'muted', text: accessText('适合老项目刚接入时使用。这个文件可以和代码一起提交，也可以随时删除。', 'Useful when introducing UXQA to an existing project. You can commit or delete this file.') })),
+      h('p', { class: 'muted', text: accessText('适合老项目刚接入时使用。这个文件可以和代码一起提交，也可以随时删除。', 'Useful when introducing QA Master to an existing project. You can commit or delete this file.') })),
     confirmText: accessText('写入并记录', 'Write baseline'),
   });
   if (!ok) return;
@@ -1302,7 +1325,7 @@ async function renderRules(body) {
   refreshBar();
   fill(body, h('div', { class: 'page' },
     h('div', { class: 'panel' },
-      h('h2', { text: accessText('检查哪些东西', 'What UXQA checks') }),
+      h('h2', { text: accessText('检查哪些东西', 'What QA Master checks') }),
       h('p', { class: 'muted', text: accessText(`一共 ${data.catalog.length} 条，默认已经按常见做法设好，一般不用改。"必须改"的问题在 AI 写代码时会被当场拦下；"建议改""可以看看"只提醒。`, `${data.catalog.length} built-in rules have default levels. Must-fix findings can block supported AI write hooks; other levels are advisory.`) }),
       groups.map(([kind, title]) => h('div', { class: 'stack-tight' }, h('h3', { text: title }), data.catalog.filter((entry) => entry.kind === kind).map(ruleRow))),
       switchMessage, changeBar),
@@ -1375,7 +1398,7 @@ function renderSettings(body) {
     h('div', { class: 'field' }, h('label', { for: 'base-url', text: accessText('预览地址', 'Preview URL') }),
       h('div', { class: 'row' }, h('input', { id: 'base-url', class: 'input grow', type: 'text', inputmode: 'url', autocomplete: 'off', placeholder: 'localhost:5173', value: pages.baseUrl }),
         h('button', { class: 'btn', type: 'button', onclick: () => findPreviewInto(entry, finder) }, icon('scan'), accessText('帮我找', 'Find preview'))),
-      h('span', { class: 'hint', text: accessText('不知道填什么就点"帮我找"。也可以自己写，例如 localhost:5173，会自动补上 http://。', 'Find a running preview, or enter an address such as localhost:5173. UXQA adds http:// when needed.') }),
+      h('span', { class: 'hint', text: accessText('不知道填什么就点"帮我找"。也可以自己写，例如 localhost:5173，会自动补上 http://。', 'Find a running preview, or enter an address such as localhost:5173. QA Master adds http:// when needed.') }),
       finder),
     h('div', { class: 'field' }, h('label', { for: 'routes', text: accessText('要打开的页面（一行一个，以 / 开头）', 'Pages to open (one per line, beginning with /)') }), routes),
     h('label', { class: 'check' }, h('input', { id: 'discover', type: 'checkbox', checked: pages.discover }), accessText('自动找更多页面（读取项目里的路由，并顺着页面链接找）', 'Find more pages from project routes and page links')),
@@ -1436,7 +1459,7 @@ function nativeModelsPanel(saved, save) {
       h('div', { class: 'row' }, h('b', { class: 'grow', text: item.name }),
         h('button', { class: 'btn', type: 'button', onclick: () => editProvider(item) }, accessText('编辑', 'Edit')),
         h('button', { class: 'btn quiet', type: 'button', onclick: (event) => action(event.currentTarget, async () => {
-          if (!await confirmSheet({ title: accessText(`移除 ${item.name}？`, `Remove ${item.name}?`), body: h('p', { text: accessText('将删除 UXQA 保存的连接配置。使用这个服务商的复核会需要重新选择模型。', 'This deletes the connection saved in UXQA. Select another model for reviews using this provider.') }), confirmText: accessText('移除服务商', 'Remove provider') })) { fill(status); return; }
+          if (!await confirmSheet({ title: accessText(`移除 ${item.name}？`, `Remove ${item.name}?`), body: h('p', { text: accessText('将删除 QA大师 保存的连接配置。使用这个服务商的复核会需要重新选择模型。', 'This deletes the connection saved in QA Master. Select another model for reviews using this provider.') }), confirmText: accessText('移除服务商', 'Remove provider') })) { fill(status); return; }
           await api('/ai/native/provider-delete', { method: 'POST', body: { id: item.id } }); await refresh();
           fill(status, h('p', { text: accessText('服务商已移除。', 'Provider removed.') }));
         }) }, accessText('移除', 'Remove'))),
@@ -1447,9 +1470,9 @@ function nativeModelsPanel(saved, save) {
         await api('/ai/native/account', { method: 'POST', body: { agent: item.agent, user: item.user, on: !item.on } }); await refresh(); fill(status, h('p', { text: item.on ? accessText('账号已停用。', 'Account disabled.') : accessText('账号已启用。', 'Account enabled.') }));
       }) }, item.on ? accessText('停用', 'Disable') : accessText('启用', 'Enable')),
       h('button', { class: 'btn quiet', type: 'button', onclick: (event) => action(event.currentTarget, async () => {
-        if (!await confirmSheet({ title: accessText('从 UXQA 移除账号？', 'Remove account from UXQA?'), body: h('p', { text: accessText(`移除 ${item.user} 在 UXQA 保存的登录凭据。`, `Remove credentials saved in UXQA for ${item.user}.`) }), confirmText: accessText('移除账号', 'Remove account') })) { fill(status); return; }
-        await api('/ai/native/account', { method: 'POST', body: { agent: item.agent, user: item.user, remove: true } }); await refresh(); fill(status, h('p', { text: accessText('账号已从 UXQA 移除。', 'Account removed from UXQA.') }));
-      }) }, accessText('移除', 'Remove')))) : h('p', { class: 'faint', text: accessText('还没有在 UXQA 登录的订阅账号。', 'No subscription accounts signed in to UXQA.') }));
+        if (!await confirmSheet({ title: accessText('从 QA大师 移除账号？', 'Remove account from QA Master?'), body: h('p', { text: accessText(`移除 ${item.user} 在 QA大师 保存的登录凭据。`, `Remove credentials saved in QA Master for ${item.user}.`) }), confirmText: accessText('移除账号', 'Remove account') })) { fill(status); return; }
+        await api('/ai/native/account', { method: 'POST', body: { agent: item.agent, user: item.user, remove: true } }); await refresh(); fill(status, h('p', { text: accessText('账号已从 QA大师 移除。', 'Account removed from QA Master.') }));
+      }) }, accessText('移除', 'Remove')))) : h('p', { class: 'faint', text: accessText('还没有在 QA大师 登录的订阅账号。', 'No subscription accounts signed in to QA Master.') }));
   };
   const editProvider = (item = {}) => openOverlay((panel, close) => {
     const name = h('input', { id: 'provider-name', class: 'input', value: item.name ?? '', 'data-autofocus': true });
@@ -1476,7 +1499,7 @@ function nativeModelsPanel(saved, save) {
     flow = state;
     clearTimeout(timer);
     const finished = ['done', 'failed', 'canceled'].includes(state.state);
-    const text = state.state === 'done' ? accessText('登录成功，账号已保存到 UXQA。现在可以获取模型。', 'Signed in; the account is saved in UXQA. You can now fetch models.') : state.state === 'failed' ? accessText('登录失败，请重新开始。', 'Sign-in failed. Please try again.') : state.state === 'canceled' ? accessText('登录已取消。', 'Sign-in canceled.') : accessText('等待服务商授权，请在浏览器完成登录。', 'Waiting for provider authorization. Complete sign-in in the browser.');
+    const text = state.state === 'done' ? accessText('登录成功，账号已保存到 QA大师。现在可以获取模型。', 'Signed in; the account is saved in QA Master. You can now fetch models.') : state.state === 'failed' ? accessText('登录失败，请重新开始。', 'Sign-in failed. Please try again.') : state.state === 'canceled' ? accessText('登录已取消。', 'Sign-in canceled.') : accessText('等待服务商授权，请在浏览器完成登录。', 'Waiting for provider authorization. Complete sign-in in the browser.');
     const children = [h('p', { text })];
     if (!finished) {
       if (state.url?.startsWith('https://')) children.push(h('a', { class: 'btn primary', href: state.url, target: '_blank', rel: 'noopener noreferrer', text: accessText('在浏览器继续授权', 'Continue authorization in browser') }));
@@ -1506,10 +1529,10 @@ function nativeModelsPanel(saved, save) {
       }
     }, 1500);
   };
-  append(section, [h('p', { text: accessText('在 UXQA 内管理模型连接和订阅账号。配置保存在本机，截图复核使用你选择的模型。', 'Manage model connections and subscription accounts in UXQA. Settings are stored locally; screenshot reviews use your chosen model.') }),
+  append(section, [h('p', { text: accessText('在 QA大师 内管理模型连接和订阅账号。配置保存在本机，截图复核使用你选择的模型。', 'Manage model connections and subscription accounts in QA Master. Settings are stored locally; screenshot reviews use your chosen model.') }),
     h('div', { class: 'row' }, h('h3', { class: 'grow', text: accessText('API 服务商', 'API providers') }), h('button', { class: 'btn', type: 'button', onclick: () => editProvider() }, accessText('添加服务商', 'Add provider'))), providers,
     h('h3', { text: accessText('订阅账号', 'Subscription accounts') }), accounts,
-    h('p', { class: 'faint', text: accessText('账号在服务商网页授权后保存到 UXQA。Claude 订阅需要本机已安装官方 Claude Code；Gemini 需要可用的 Code Assist 账号与项目。', 'Accounts are saved to UXQA after authorization with the provider. Claude subscriptions require the official Claude Code locally; Gemini requires an eligible Code Assist account and project.') }),
+    h('p', { class: 'faint', text: accessText('账号在服务商网页授权后保存到 QA大师。Claude 订阅需要本机已安装官方 Claude Code；Gemini 需要可用的 Code Assist 账号与项目。', 'Accounts are saved to QA Master after authorization with the provider. Claude subscriptions require the official Claude Code locally; Gemini requires an eligible Code Assist account and project.') }),
     h('div', { class: 'field' }, h('label', { for: 'native-agent', text: accessText('登录的订阅服务', 'Subscription service') }), agent),
     h('button', { class: 'btn', type: 'button', onclick: (event) => action(event.currentTarget, async () => {
       if (busy) return; busy = true;
@@ -1544,10 +1567,10 @@ async function renderAiPanel(panel) {
     if (mode === 'off') body = h('div', { class: 'row' }, h('span', { class: 'grow faint', text: accessText('现在不用 AI 看图。', 'AI image review is off.') }), saved.mode !== 'off' ? h('button', { class: 'btn primary', type: 'button', onclick: () => save({ mode: 'off' }) }, accessText('保存', 'Save')) : null);
     if (mode === 'agent') {
       body = h('div', { class: 'stack' },
-        h('p', { text: accessText('可通过 UXQA 的 MCP 让已有 AI 助手复核截图；使用受该助手的账号、套餐与用量限制约束。', 'Use an existing AI assistant through UXQA MCP to review screenshots. Its account, subscription and usage limits apply.') }),
+        h('p', { text: accessText('可通过 QA大师 的 MCP 让已有 AI 助手复核截图；使用受该助手的账号、套餐与用量限制约束。', 'Use an existing AI assistant through QA Master MCP to review screenshots. Its account, subscription and usage limits apply.') }),
         h('ol', { class: 'howto' },
           h('li', { text: accessText('按下面"连接你的 AI 助手"里的说明接一次。', 'Connect once using the instructions below.') }),
-          h('li', { text: accessText('在项目里点"开始检测"，然后对 AI 助手说"用 uxqa 复核截图"。它看完提交的结论会显示在问题旁边，标着"AI 助手（MCP）"。', 'Run a project check, then ask your assistant to review UXQA screenshots. Submitted findings are marked as AI assistant results.') })),
+          h('li', { text: accessText('在项目里点"开始检测"，然后对 AI 助手说"用 uxqa 复核截图"。它看完提交的结论会显示在问题旁边，标着"AI 助手（MCP）"。', 'Run a project check, then ask your assistant to review QA Master screenshots. Submitted findings are marked as AI assistant results.') })),
         h('div', { class: 'row' }, h('span', { class: 'grow' }), saved.mode !== 'agent' ? h('button', { class: 'btn primary', type: 'button', onclick: () => save({ mode: 'agent' }) }, accessText('保存', 'Save')) : h('span', { class: 'chip ok', text: accessText('已在使用', 'Active') })));
     }
     if (mode === 'subscription') body = nativeModelsPanel(saved, save);
@@ -1572,7 +1595,7 @@ async function renderAiPanel(panel) {
       const models = h('select', { class: 'input', 'aria-label': accessText('可用模型', 'Available models') }, h('option', { value: '', text: accessText('可手动填写，也可获取模型列表', 'Enter a name or fetch models') }));
       models.addEventListener('change', () => { if (models.value) model.value = models.value; });
       body = h('form', { class: 'stack', onsubmit: (event) => { event.preventDefault(); save(values()); } },
-        h('div', { class: 'notice', role: 'note', text: accessText('开启后，每一轮的截图会发送给你配置的模型服务。API Key 保存在本机 UXQA 数据目录，不写进项目。按次计费的服务会产生费用，可设置每轮请求上限。', 'When enabled, screenshots are sent to the configured model service. The API key is stored in UXQA local data, outside the project. Usage may incur charges; set a per-round request limit below.') }),
+        h('div', { class: 'notice', role: 'note', text: accessText('开启后，每一轮的截图会发送给你配置的模型服务。API Key 保存在本机 QA大师 数据目录，不写进项目。按次计费的服务会产生费用，可设置每轮请求上限。', 'When enabled, screenshots are sent to the configured model service. The API key is stored in QA Master local data, outside the project. Usage may incur charges; set a per-round request limit below.') }),
         h('div', { class: 'field' }, h('label', { for: 'ai-preset', text: accessText('服务商', 'Provider') }), preset),
         h('div', { class: 'field' }, h('label', { for: 'ai-protocol', text: accessText('接口类型', 'Protocol') }), protocol),
         h('div', { class: 'field' }, h('label', { for: 'ai-base', text: accessText('模型地址', 'Model URL') }), baseUrl),
@@ -1612,7 +1635,7 @@ async function renderAiPanel(panel) {
       Object.assign(saved, result.settings);
       mode = saved.mode === 'api' && ['native', 'magpie'].includes(saved.connection) ? 'subscription' : saved.mode;
       draw();
-      fill(message, h('div', { class: 'notice', text: saved.mode === 'off' ? accessText('已关闭 AI 看图。', 'AI image review is off.') : saved.mode === 'api' ? accessText('已保存。下一轮检测完会自动让 AI 看截图；已有的检测也可以在问题列表上方点"AI 看图复核"。', 'Saved. AI will review screenshots after the next check; existing rounds can also be reviewed from the findings list.') : accessText('已保存。检测后对你的 AI 助手说"用 uxqa 复核截图"。', 'Saved. After checking, ask your AI assistant to review the screenshots with UXQA.') }));
+      fill(message, h('div', { class: 'notice', text: saved.mode === 'off' ? accessText('已关闭 AI 看图。', 'AI image review is off.') : saved.mode === 'api' ? accessText('已保存。下一轮检测完会自动让 AI 看截图；已有的检测也可以在问题列表上方点"AI 看图复核"。', 'Saved. AI will review screenshots after the next check; existing rounds can also be reviewed from the findings list.') : accessText('已保存。检测后对你的 AI 助手说"用 uxqa 复核截图"。', 'Saved. After checking, ask your AI assistant to review the screenshots with QA Master.') }));
     } catch (error) { fill(message, h('div', { class: 'notice error', text: error.message })); }
     finally { saving = false; panel.removeAttribute('aria-busy'); controls.forEach((control) => { control.disabled = false; }); }
   };
@@ -1670,8 +1693,9 @@ async function removeCurrent() {
     return;
   }
   if (start) {
-    await selectProject(start.id);
-    if (TABS.some(([id]) => id === wanted.get('tab'))) { state.tab = wanted.get('tab'); renderWorkspace(); }
+    const initialTab = TABS.some(([id]) => id === wanted.get('tab')) ? wanted.get('tab') : 'checks';
+    await selectProject(start.id, initialTab);
+    if (state.current !== start.id || state.tab !== initialTab || state.global) return;
   } else renderWorkspace();
   // ?open=add|prompt|notes|changes opens that panel directly, so a link can point at it.
   const panel = wanted.get('open');

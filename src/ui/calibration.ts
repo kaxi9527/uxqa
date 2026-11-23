@@ -231,9 +231,10 @@ interface Counts {
   passesWithEase:number; difficultPasses:number;
 }
 /** Report counts only. Never turn an empty denominator or an unanswered review into agreement. */
-export async function calibrationMetrics(){
+export async function calibrationMetrics(projectId?:string){
   const groups=new Map<string,{partition:Partition; suite:string; model:string; configuration:string; rubric:string; counts:Counts; projectIds:Set<string>}>();
   for(const project of await listProjects()) {
+    if(projectId && project.id!==projectId)continue;
     for(const item of await caseFiles(project)){
       if(item.previous)continue;
       const prediction=item.prediction, config=prediction?.configuration || 'unassessed';
@@ -284,4 +285,14 @@ export async function calibrationMetrics(){
     }
   }
   return [...groups.values()].map(({projectIds,counts,...group})=>({...group,counts:{...counts,projects:projectIds.size}}));
+}
+
+export async function settledDisagreements(project:ProjectEntry){
+  return (await caseFiles(project)).flatMap(c=>{
+    const grade=finalGrade(c);
+    if(!grade||c.prediction?.grade!=='pass')return [];
+    const difficulty=c.facts.some(f=>typeof f.reportedEase==='number'&&f.reportedEase<=3);
+    if(grade!=='blocker'&&!difficulty)return [];
+    return [{id:c.id,roundId:c.roundId,suite:c.suite,task:c.task,blocked:grade==='blocker',difficulty}];
+  }).sort((a,b)=>Number(b.blocked)-Number(a.blocked));
 }

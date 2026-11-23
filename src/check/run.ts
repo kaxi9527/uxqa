@@ -7,6 +7,7 @@ import { componentLabel, NATIVE_MAPPINGS } from '../inventory/semantics.js';
 import { BASIC_VERSION, buildRuleSet, readRuleFile, RuleConfigError, validateAgainstInventory } from '../rules/load.js';
 import type { Rule, RuleLevel, RuleSet } from '../rules/types.js';
 import { readBaseline, type Baseline } from './baseline.js';
+import { directoryCounts, type SourceCoverage } from './coverage.js';
 import { colorExamples, describeVariants, elementLabel, importHint, pxText, quote, sizeKind, isFontSizePrefix, isSpacingPrefix, nearestColorToken, nearestSize, type PlainMessage } from './messages.js';
 import type { AiNote } from '../ai/review.js';
 import type { IssueDomain } from '../guidance/types.js';
@@ -64,6 +65,7 @@ export interface CheckResult {
   rules: { source?: string; basic: string | null; active: Array<{ id: string; level: RuleLevel; origin: Rule['origin'] }>; disabled: RuleSet['disabled']; guidance: RuleSet['guidance'] };
   scope: 'files' | 'project';
   filesScanned: number;
+  coverage?: SourceCoverage;
   skipped: Array<{ file: string; reason: string }>;
   violations: Violation[];
   /** Names of components the project defines outside its libraries (page-level components). */
@@ -466,8 +468,10 @@ export async function runCheck(options: CheckOptions): Promise<CheckResult> {
   const productRoot = inventory.productRoot;
 
   const skipped: CheckResult['skipped'] = [];
+  const discovery = { excludedDirectories: [] as string[], reachedFileLimit: false };
+  const contextFiles = new Set<string>();
   let targets: string[];
-  if (options.files?.length) {
+  if (options.files !== undefined) {
     targets = [];
     for (const file of options.files) {
       // Relative paths are tried from the current directory first, then from the product root.
@@ -480,47 +484,69 @@ export async function runCheck(options: CheckOptions): Promise<CheckResult> {
       if (!isScannable(absolute)) { skipped.push({ file: rel, reason: '不是需要检查的代码或样式文件' }); continue; }
       targets.push(absolute);
     }
-  } else targets = await listProductFiles(productRoot);
+  } else targets = await listProductFiles(productRoot, discovery);
 
   const scanned: ScannedFile[] = [];
-  for (const file of targets) {
+  for (const file of new Set(targets)) {
     const result = await scanFile(productRoot, file);
     if (result.parseError) skipped.push({ file: result.file, reason: result.parseError });
     scanned.push(result);
   }
   // Duplicate detection needs every definition in the library even when only a few files are checked.
   const allDefinitions = scanned.flatMap((file) => file.observations.filter((observation): observation is Extract<Observation, { kind: 'definition' }> => observation.kind === 'definition'));
-  if (options.files?.length && inventory.libraryRoot) {
+  if (options.files && scanned.length && inventory.libraryRoot) {
     const scannedFiles = new Set(scanned.map((file) => file.file));
     for (const file of await listProductFiles(inventory.libraryRoot)) {
       const result = await scanFile(productRoot, file);
       if (scannedFiles.has(result.file)) continue;
+      if (!result.parseError) contextFiles.add(result.file);
       allDefinitions.push(...result.observations.filter((observation): observation is Extract<Observation, { kind: 'definition' }> => observation.kind === 'definition'));
     }
   }
 
   // Repetition is a property of the whole project: when only some files are checked, still read the rest for patterns.
   const allPatterns = scanned.flatMap((file) => file.observations.filter((observation): observation is Pattern => observation.kind === 'pattern'));
-  if (options.files?.length && ruleSet.rules.some((rule) => rule.type === 'repeated-pattern' && rule.level !== 'off')) {
+  if (options.files && scanned.length && ruleSet.rules.some((rule) => rule.type === 'repeated-pattern' && rule.level !== 'off')) {
     const scannedFiles = new Set(scanned.map((file) => file.file));
     for (const file of await listProductFiles(productRoot)) {
       const result = await scanFile(productRoot, file);
       if (scannedFiles.has(result.file)) continue;
+      if (!result.parseError) contextFiles.add(result.file);
       allPatterns.push(...result.observations.filter((observation): observation is Pattern => observation.kind === 'pattern'));
     }
   }
 
   const byFile = new Map(scanned.map((file) => [file.file, file]));
+  const selectedFiles = options.files === undefined ? undefined : new Set(byFile.keys());
   const baseline: Baseline | undefined = options.baselinePath ? await readBaseline(options.baselinePath) : undefined;
   const baselineSet = new Set(baseline?.entries.map((entry) => entry.fingerprint) ?? []);
   const seen = new Map<string, number>();
   const violations: Violation[] = [];
   const ignoreWithoutReason: CheckResult['ignoreWithoutReason'] = [];
+  const checkedFiles = scanned.filter(file => !file.parseError);
+  const ruleSkips: SourceCoverage['ruleSkips'] = [];
 
   for (const rule of ruleSet.rules) {
     if (rule.level === 'off') continue;
-    let drafts = applyRule(rule, inventory, scanned, allDefinitions, allPatterns, options.files?.length ? new Set(byFile.keys()) : undefined);
-    if (options.files?.length) drafts = drafts.filter((draft) => byFile.has(draft.file));
+    const excluded: string[] = [], library: string[] = [];
+    const libraryExempt = ['repeated-pattern','use-library-component','require-library-component','no-hardcoded-color','no-arbitrary-size','value-scale'].includes(rule.type);
+    const eligible = checkedFiles.filter(({file}) => {
+      if (!inScope(rule, file)) { excluded.push(file); return false; }
+      if (inLibrary(inventory, file) && (libraryExempt || rule.type === 'text-length')) {
+        library.push(file);
+        return !libraryExempt;
+      }
+      return true;
+    });
+    if (!checkedFiles.length) ruleSkips.push({rule: rule.id, reason: 'no-files', directories: {}});
+    if (excluded.length) ruleSkips.push({rule: rule.id, reason: 'scope', directories: directoryCounts(excluded)});
+    if (library.length) ruleSkips.push({rule: rule.id, reason: libraryExempt ? 'library' : 'library-intrinsics', directories: directoryCounts(library)});
+    if (rule.type === 'use-library-component' && !inventory.components.length && eligible.length) {
+      ruleSkips.push({rule: rule.id, reason:'no-components', directories:directoryCounts(eligible.map(file=>file.file))});
+      continue;
+    }
+    let drafts = applyRule(rule, inventory, eligible, allDefinitions, allPatterns, selectedFiles);
+    if (selectedFiles) drafts = drafts.filter((draft) => selectedFiles.has(draft.file));
     drafts.sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line || a.column - b.column);
     for (const draft of drafts) {
       const base = fingerprintBase(rule.id, draft.anchor ?? draft.file, draft.subject);
@@ -554,7 +580,7 @@ export async function runCheck(options: CheckOptions): Promise<CheckResult> {
 
   const fresh = violations.filter((violation) => violation.status === 'new');
   const matched = new Set(violations.filter((violation) => violation.status === 'baseline').map((violation) => violation.fingerprint));
-  const relevantBaseline = baseline?.entries.filter((entry) => !options.files?.length || byFile.has(entry.file)) ?? [];
+  const relevantBaseline = baseline?.entries.filter((entry) => !selectedFiles || selectedFiles.has(entry.file)) ?? [];
   return {
     productRoot,
     components: [...new Set(allDefinitions.filter((definition) => !inLibrary(inventory, definition.file)).map((definition) => definition.name))],
@@ -565,8 +591,10 @@ export async function runCheck(options: CheckOptions): Promise<CheckResult> {
       active: ruleSet.rules.map((rule) => ({ id: rule.id, level: rule.level, origin: rule.origin })),
       disabled: ruleSet.disabled, guidance: ruleSet.guidance,
     },
-    scope: options.files?.length ? 'files' : 'project',
-    filesScanned: scanned.length - skipped.filter((entry) => byFile.has(entry.file)).length,
+    scope: selectedFiles ? 'files' : 'project',
+    filesScanned: checkedFiles.length,
+    coverage: { requested: toPosix(relative(productRoot, sourceRoot)) || '.', directories: directoryCounts(checkedFiles.map(file => file.file)),
+      contextDirectories: directoryCounts(contextFiles), ...discovery, ruleSkips },
     skipped, violations, ignoreWithoutReason,
     ...(baseline && options.baselinePath ? { baseline: { path: options.baselinePath, entries: baseline.entries.length, fixed: relevantBaseline.filter((entry) => !matched.has(entry.fingerprint)).length } } : {}),
     summary: {

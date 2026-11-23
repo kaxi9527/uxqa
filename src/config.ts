@@ -1,17 +1,19 @@
-import type { BusinessJourney, DataNature, FlowConfig, HarnessConfig, JourneyAssertion, JourneyList, JourneyObservation, JourneyPredicate, NetworkRule, NotApplicableEntry, Step, Target, ViewportConfig } from './types.js';
+import { INTERACTION_SCENARIOS, type BusinessJourney, type DataNature, type FlowConfig, type HarnessConfig, type JourneyAssertion, type JourneyList, type JourneyObservation, type JourneyPredicate, type NetworkRule, type NotApplicableEntry, type Step, type Target, type ViewportConfig } from './types.js';
+
+import { buildRequirementCheck } from './requirement-checks.js';
 
 const DEFAULT_VIEWPORTS: ViewportConfig[] = [
   { name: 'desktop', width: 1440, height: 900 },
   { name: 'mobile', width: 390, height: 844 },
 ];
 
-const TARGET_ACTIONS = new Set(['click', 'fill', 'press', 'selectOption', 'waitFor', 'expectVisible', 'expectHidden', 'expectText', 'expectValue', 'expectEnabled', 'expectDisabled', 'expectFocused', 'expectCount']);
+const TARGET_ACTIONS = new Set(['click', 'fill', 'press', 'selectOption', 'waitFor', 'waitForHidden', 'expectVisible', 'expectHidden', 'expectText', 'expectValue', 'expectEnabled', 'expectDisabled', 'expectFocused', 'expectCount']);
 const PAGE_ACTIONS = new Set(['keyboard', 'expectUrl', 'expectRequestCount', 'expectAnnounced']);
 const DEFAULT_AXE_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 const DATA_NATURES = new Set<DataNature>(['real', 'mock', 'fixture', 'mixed', 'unknown']);
 const ABORT_CODES = new Set(['failed', 'timedout', 'internetdisconnected', 'connectionrefused']);
 /** Check ids that may be declared not applicable with a reason; declared checks are skipped, not silently passed. */
-export const CHECK_IDS = ['axe', 'keyboard-focus', 'reflow-320', 'zoom-200', 'reduced-motion', 'screen-reader', 'tab-order-logic', 'design-fidelity', 'real-device', 'real-api', 'code-revision', 'engineering-gates', 'deployment'];
+export const CHECK_IDS = ['axe', 'keyboard-focus', 'reflow-320', 'zoom-200', 'reduced-motion', 'screen-reader', 'tab-order-logic', 'design-fidelity', 'real-device', 'real-api', 'code-revision', 'engineering-gates', 'deployment', ...INTERACTION_SCENARIOS];
 const ROLES = new Set('alert alertdialog application article banner blockquote button caption cell checkbox code columnheader combobox complementary contentinfo definition deletion dialog directory document emphasis feed figure form generic grid gridcell group heading img insertion link list listbox listitem log main marquee math meter menu menubar menuitem menuitemcheckbox menuitemradio navigation none note option paragraph presentation progressbar radio radiogroup region row rowgroup rowheader scrollbar search searchbox separator slider spinbutton status strong subscript superscript switch tab table tablist tabpanel term textbox time timer toolbar tooltip tree treegrid treeitem'.split(' '));
 
 function record(value: unknown, label: string): Record<string, unknown> {
@@ -184,7 +186,7 @@ function parseObservation(value: unknown, known: Set<string>): JourneyObservatio
   const id = stringValue(item.id, 'observation.id');
   if (known.has(id)) throw new Error('Observation IDs must be unique within the scenario: ' + id);
   const read = item.read;
-  if (read !== 'text' && read !== 'value' && read !== 'attribute') throw new Error('observation.read must be text, value or attribute');
+  if (read !== 'text' && read !== 'value' && read !== 'attribute' && read !== 'display') throw new Error('observation.read must be text, value, display or attribute');
   if (item.as !== undefined && item.as !== 'number') throw new Error('Only as: number is supported');
   if (read !== 'attribute' && item.attribute !== undefined) throw new Error('An attribute name needs read: attribute');
   known.add(id);
@@ -221,13 +223,18 @@ function parseSameFact(value: unknown, known: Set<string>): NonNullable<JourneyA
 export function parseJourney(value: unknown): BusinessJourney {
   const plan = record(value, 'journey');
   const snapshots = new Map<string, string[]>();
+  const visitedActors = new Set<string>();
   const known = new Set<string>();
   if (!Array.isArray(plan.phases) || !plan.phases.length) throw new Error('journey.phases must be a non-empty array');
   const phases = plan.phases.map((raw) => {
     const phase = record(raw, 'phase');
+    const actor = stringValue(phase.actor, 'phase.actor');
     const route = stringValue(phase.route, 'phase.route');
     if (!route.startsWith('/') || route.startsWith('//') || route.includes('\\') || /[\x00-\x1f]/.test(route) || new URL(route, 'https://project.invalid').origin !== 'https://project.invalid') throw new Error('phase.route must be a project-relative URL starting with /');
     const steps = phase.steps ?? [];
+    const stay = booleanOption(phase.continueOnPage, false, 'phase.continueOnPage');
+    if (stay && !visitedActors.has(actor)) throw new Error('continueOnPage needs an earlier page for this actor');
+    visitedActors.add(actor);
     if (!Array.isArray(steps)) throw new Error('phase.steps must be an array');
     let list: JourneyList | undefined;
     if (phase.list !== undefined) {
@@ -250,10 +257,21 @@ export function parseJourney(value: unknown): BusinessJourney {
         snapshots.set(list.saveAs, keys);
       }
       if (!list.saveAs && !list.equals) throw new Error('A list needs saveAs or equals');
+      if (input.partitionWitness !== undefined) {
+        const partition = record(input.partitionWitness,'list.partitionWitness');
+        const field = stringValue(partition.field,'partition field'), baselines=stringMap(partition.baselines,'role baselines');
+        if (!keys.includes(field) || Object.keys(baselines).length<2 || Object.values(baselines).some(ref=>ref===list!.saveAs || JSON.stringify(snapshots.get(ref))!==JSON.stringify(keys))) throw new Error('Partition witness needs a recipient field and earlier comparable baselines for at least two recipients');
+        list.partitionWitness={field,baselines};
+      }
     }
     if (phase.observe !== undefined && !Array.isArray(phase.observe)) throw new Error('phase.observe must be an array');
     if (phase.assert !== undefined && !Array.isArray(phase.assert)) throw new Error('phase.assert must be an array');
     const observe = phase.observe?.map(item => parseObservation(item, known));
+    if (phase.requires !== undefined && !Array.isArray(phase.requires)) throw new Error('phase.requires must be an array');
+    const requires = phase.requires?.map(raw => {
+      const item = record(raw,'prerequisite');
+      return {name:stringValue(item.name,'prerequisite.name'),...parsePredicate(item,known)};
+    });
     const assertions = phase.assert?.map(raw => {
       const item = record(raw, 'assertion');
       const predicate = parsePredicate(item, known);
@@ -262,7 +280,7 @@ export function parseJourney(value: unknown): BusinessJourney {
       return { name: stringValue(item.name, 'assertion.name'), ...predicate, ...(sameFact ? { sameFact } : {}), ...(item.when !== undefined ? { when: parsePredicate(record(item.when, 'assertion.when'), known) } : {}) };
     });
     if (!steps.length && !list && !observe?.length && !assertions?.length) throw new Error('A phase needs an operation, observation or assertion');
-    return { name: stringValue(phase.name, 'phase.name'), actor: stringValue(phase.actor, 'phase.actor'), route, steps: steps.map(parseStep), ...(list ? { list } : {}), ...(observe?.length ? { observe } : {}), ...(assertions?.length ? { assert: assertions } : {}) };
+    return { name: stringValue(phase.name, 'phase.name'), actor, route, steps: steps.map(parseStep), ...(booleanOption(phase.exactRoute,false,'phase.exactRoute') ? {exactRoute:true}:{}), ...(stay ? {continueOnPage:true}:{}), ...(list ? { list } : {}), ...(observe?.length ? { observe } : {}), ...(requires?.length ? {requires}:{}), ...(assertions?.length ? { assert: assertions } : {}) };
   });
   const gaps = stringArray(plan.gaps, [], 'journey.gaps');
   if (!gaps.length && !phases.some(p => p.assert?.length || p.list?.equals || p.steps.some(s => s.action.startsWith('expect')))) throw new Error('A scenario needs an assertion or an explicit evidence gap');
@@ -274,6 +292,44 @@ function parseNotApplicable(value: unknown): NotApplicableEntry {
   const check = stringValue(entry.check, 'notApplicable.check');
   if (!CHECK_IDS.includes(check)) throw new Error(`notApplicable.check must be one of ${CHECK_IDS.join(', ')}`);
   return { check, reason: stringValue(entry.reason, 'notApplicable.reason') };
+}
+
+function parseInteractionScenario(value: unknown): FlowConfig {
+  const s = record(value, 'scenario');
+  const type = INTERACTION_SCENARIOS.find(id => id === s.type);
+  if (!type) throw new Error('Unknown interaction scenario: ' + String(s.type));
+  const route = stringValue(s.route, 'scenario.route');
+  const setup = s.setup ?? [];
+  if (!Array.isArray(setup)) throw new Error('scenario.setup must be an array of flow steps');
+  const steps = setup.map(parseStep);
+  const name = s.name === undefined ? type + ' ' + route.split(/[?#]/)[0] : stringValue(s.name, 'scenario.name');
+  const flow: FlowConfig = { name, scenario: type, route, steps, preparationSteps: steps.length };
+  const target = (key: string) => parseTarget(s[key]);
+  if (type === 'failure-recovery') {
+    const match = stringValue(s.request, 'scenario.request');
+    const error = target('error'), ready = target('ready');
+    flow.requirement = '首次读取失败后恢复内容并清除旧错误 / Recover content and clear the stale error';
+    flow.network = [{ match, method: 'GET', times: 1, respond: { status: 503, json: { error: 'Temporarily unavailable' } } }];
+    steps.push({ action: 'expectVisible', target: error });
+    if (s.retry) steps.push({ action: 'click', target: target('retry') });
+    steps.push({ action: 'expectRecoveryResponse', match }, { action: 'expectVisible', target: ready }, { action: 'expectHidden', target: error });
+  } else if (type === 'save-focus') {
+    const save = target('save'), saved = target('saved');
+    flow.requirement = '键盘保存成功后焦点抵达预期控件 / Continue at the intended control after keyboard save';
+    steps.push({ action: 'waitFor', target: save }, { action: 'expectHidden', target: saved });
+    flow.preparationSteps = steps.length;
+    steps.push({ action: 'press', target: save, key: 'Enter' }, { action: 'expectVisible', target: saved }, { action: 'expectFocused', target: target('continuation') });
+  } else {
+    const lang = stringValue(s.lang, 'scenario.lang'), control = target('switcher');
+    const entry = target('entry');
+    if (!('role' in entry) || !entry.name) throw new Error('scenario.entry needs a role and the expected accessible name');
+    flow.requirement = '切换语言后的首个键盘入口使用目标语言 / First keyboard entry uses the selected language';
+    steps.push({ action: 'waitFor', target: control }, { action: 'beforeLanguageSwitch', lang });
+    flow.preparationSteps = steps.length;
+    steps.push(s.option === undefined ? {action:'click', target: control} : {action:'selectOption', target:control, value:stringValue(s.option,'scenario.option')},
+      { action: 'firstTab', lang }, { action: 'expectFocused', target: { ...entry, exact:true } });
+  }
+  return flow;
 }
 
 export function loadConfig(input: unknown): HarnessConfig {
@@ -325,8 +381,18 @@ export function loadConfig(input: unknown): HarnessConfig {
   const parsedViewports = viewports.map(parseViewport);
   if (new Set(parsedViewports.map((viewport) => viewport.name)).size !== parsedViewports.length) throw new Error('viewport names must be unique');
   const parsedFlows = flows.map(parseFlow);
+  if (source.scenarios !== undefined && !Array.isArray(source.scenarios)) throw new Error('scenarios must be an array');
+  parsedFlows.push(...(source.scenarios ?? []).map(parseInteractionScenario));
+  const exclusions = notApplicable.map(parseNotApplicable);
+  if (parsedFlows.some(flow => flow.scenario && exclusions.some(entry => entry.check === flow.scenario))) throw new Error('A bound interaction scenario cannot also be declared not applicable');
   const journeys = source.journeys ?? [];
   if (!Array.isArray(journeys)) throw new Error('journeys must be an array');
+  const specialist = source.requirementChecks ?? [];
+  if (!Array.isArray(specialist)) throw new Error('requirementChecks must be an array');
+  const plans=[...journeys,...specialist.map(value=>{
+    const item=record(value,'requirement check');
+    return buildRequirementCheck(item,stringValue(item.requirement,'requirement'));
+  })].map(parseJourney);
   if (new Set(parsedFlows.map((flow) => flow.name)).size !== parsedFlows.length) throw new Error('flow names must be unique');
   for (const flow of parsedFlows) {
     if (flow.route && !routes.includes(flow.route)) throw new Error(`Flow route is not configured for coverage: ${flow.route}`);
@@ -338,14 +404,14 @@ export function loadConfig(input: unknown): HarnessConfig {
     routes,
     viewports: parsedViewports,
     flows: parsedFlows,
-    ...(journeys.length ? { journeys: journeys.map(parseJourney) } : {}),
+    ...(plans.length ? { journeys: plans } : {}),
     ...(source.actorStates === undefined ? {} : { actorStates: stringMap(source.actorStates, 'actorStates') }),
     evidence: {
       ...(rawEvidence.productRoot === undefined ? {} : { productRoot: stringValue(rawEvidence.productRoot, 'evidence.productRoot') }),
       ...(rawEvidence.environment === undefined ? {} : { environment: stringValue(rawEvidence.environment, 'evidence.environment') }),
       dataNature: dataNature as DataNature,
     },
-    notApplicable: notApplicable.map(parseNotApplicable),
+    notApplicable: exclusions,
     options: {
       axe, axeTags, bestPractice, screenshots, trace,
       keyboard: booleanOption(rawOptions.keyboard, true, 'options.keyboard'),

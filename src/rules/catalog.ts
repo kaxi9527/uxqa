@@ -63,6 +63,12 @@ const PAGE: Record<string, [string, string]> = {
   'visual/long-text-safe': ['文字加长约 60% 时界面也不坏（模拟翻译和长内容）', '换语言或内容变长时按钮折行、文字被截掉。'],
 };
 
+export function ruleDescription(id: string): string {
+  const [name, scope] = id.split('（');
+  const description = CODE[name]?.[0] ?? HINT_SENTENCE[name] ?? Object.values(HINT_RULES).find(rule => rule.id === name)?.title ?? name;
+  return scope ? description + '（' + scope : description;
+}
+
 export function ruleCatalog(ruleSet: RuleSet): CatalogEntry[] {
   const active = new Map(ruleSet.rules.map((rule) => [rule.id, rule]));
   const off = new Map(ruleSet.disabled.map((entry) => [entry.id, entry.reason]));

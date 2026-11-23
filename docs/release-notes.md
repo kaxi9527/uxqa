@@ -1,3 +1,11 @@
+## QA Master 0.8.0 · QA大师
+
+Start in **Check → Logic → Check a requirement**. Choose a passage from your project documentation and bind the test pages and controls. Three built-in checks follow a published setting to its readers, compare assignments by recipient and item after cancel or confirm, and verify what happens to an edit when you leave and return. Each result links to its evidence. Missing prerequisites remain unverified.
+
+The six-stage workflow board supports project priorities and same-scenario retests. Scan reports identify the directories actually examined and skipped rules. Interaction samples retain their bindings for replay, including after leaving the check screen.
+
+Download the archive for your system from **Assets** and verify its SHA-256. On macOS open `QA Master.app`, on Windows use `Open uxqa console.cmd`, and on Linux use `./open-uxqa-console.sh`. The existing `uxqa` command and local project data remain compatible. [English guide](https://github.com/kaxi9527/uxqa/blob/v0.8.0/docs/install-and-use.en.md) · [中文安装说明](https://github.com/kaxi9527/uxqa/blob/v0.8.0/docs/install-and-use.md) · [中文更新说明](https://github.com/kaxi9527/uxqa/blob/v0.8.0/docs/release-notes.zh-CN.md)
+
 ## UXQA 0.7.0
 
 Download the archive for your OS and processor from this release’s **Assets**, verify it against `SHA256SUMS.txt`, and extract it. macOS users open `UXQA.app`, Windows users start `Open uxqa console.cmd`, and Linux users run `./open-uxqa-console.sh`. Quit an older copy before upgrading. [English installation guide](install-and-use.en.md) · [中文安装说明](install-and-use.md)

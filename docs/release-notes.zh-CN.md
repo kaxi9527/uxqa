@@ -1,4 +1,12 @@
-# UXQA 更新说明
+# QA大师更新说明
+
+## QA大师 0.8.0
+
+产品名称更新为 **QA大师 / QA Master**。从「检查 → 逻辑判断 → 从需求开始验收」选一段原文，绑定页面与控件后，可验证配置发布后是否在各入口生效、确认或取消后各角色实际收到哪些对象，以及离开编辑页再返回时是否按要求保留或恢复原值。证据不足会标明待验证。
+
+六列工作流看板支持按优先级安排修复和按原场景复验。源码报告列出实际检查目录和规则跳过原因。交互实测会保留绑定，离开检查页再返回也能看到运行结果。
+
+在下载页 **Assets** 选择对应系统的压缩包并核验 SHA-256。Mac 打开 `QA Master.app`，Windows 双击 `Open uxqa console.cmd`，Linux 运行 `./open-uxqa-console.sh`。原有项目数据和 `uxqa` 命令可继续使用。[中文安装说明](install-and-use.md) · [English installation guide](install-and-use.en.md)
 
 ## UXQA 0.7.0
 

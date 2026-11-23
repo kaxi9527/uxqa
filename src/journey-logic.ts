@@ -8,9 +8,15 @@ export type LogicVerdict = { name: string; status: 'pass' | 'fail' | 'not-verifi
 export async function observeValue(page: Page, observation: JourneyObservation): Promise<ObservedValue> {
   const locator = resolveTarget(page, observation.target);
   try {
+    if (observation.read === 'display') await locator.waitFor({state:'visible'});
     const raw = await locator.evaluate((node, spec) => {
       if (node instanceof HTMLInputElement && node.type === 'password') return null;
       if (spec.read === 'attribute') return node.getAttribute(spec.attribute!);
+      if (spec.read === 'display') {
+        const value = node instanceof HTMLInputElement || node instanceof HTMLTextAreaElement || node instanceof HTMLSelectElement
+          ? node.value : node instanceof HTMLElement ? node.innerText : node.textContent;
+        return value?.trim() ? value.trim() : null;
+      }
       if (spec.read === 'text') return node instanceof HTMLElement ? node.innerText : node.textContent;
       return node instanceof HTMLInputElement || node instanceof HTMLTextAreaElement || node instanceof HTMLSelectElement ? node.value : null;
     }, observation);

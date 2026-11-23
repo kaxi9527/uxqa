@@ -9,11 +9,11 @@ import type { PageView } from './audit.js';
  */
 export interface ViewChange { route: string; width: number; previousRound: string; previousImage: string; image: string; diff?: string; percent: number; imagesExpired?: boolean }
 
-const COMPARE_SCRIPT = `async ([before, after]) => {
+const COMPARE_SCRIPT = `async ([before, after, region]) => {
   const load = (src) => new Promise((resolve, reject) => { const image = new Image(); image.onload = () => resolve(image); image.onerror = reject; image.src = src; });
   const [a, b] = await Promise.all([load(before), load(after)]);
-  const width = Math.max(a.width, b.width), height = Math.max(a.height, b.height);
-  const read = (image) => { const canvas = document.createElement('canvas'); canvas.width = width; canvas.height = height; const context = canvas.getContext('2d'); context.fillStyle = '#fff'; context.fillRect(0, 0, width, height); context.drawImage(image, 0, 0); return context.getImageData(0, 0, width, height); };
+  const width = region?.width ?? Math.max(a.width, b.width), height = region?.height ?? Math.max(a.height, b.height);
+  const read = (image) => { const canvas = document.createElement('canvas'); canvas.width = width; canvas.height = height; const context = canvas.getContext('2d'); context.fillStyle = '#fff'; context.fillRect(0, 0, width, height); context.drawImage(image, -(region?.x ?? 0), -(region?.y ?? 0)); return context.getImageData(0, 0, width, height); };
   const one = read(a), two = read(b);
   const out = new ImageData(width, height);
   let changed = 0;
@@ -27,14 +27,14 @@ const COMPARE_SCRIPT = `async ([before, after]) => {
   return { changed, percent: changed / (width * height) * 100, diff: changed ? canvas.toDataURL('image/png') : '' };
 }`;
 
-async function compareOnPage(page: Page, first: Buffer, second: Buffer) {
+async function compareOnPage(page: Page, first: Buffer, second: Buffer, region?: {x:number;y:number;width:number;height:number}) {
   const urls = [first, second].map(data => 'data:image/png;base64,' + data.toString('base64'));
-  return page.evaluate('(' + COMPARE_SCRIPT + ')(' + JSON.stringify(urls) + ')') as Promise<{ changed: number; percent: number; diff: string }>;
+  return page.evaluate('(' + COMPARE_SCRIPT + ')(' + JSON.stringify([...urls,region]) + ')') as Promise<{ changed: number; percent: number; diff: string }>;
 }
 
-export async function comparePngs(first: Buffer, second: Buffer) {
+export async function comparePngs(first: Buffer, second: Buffer, region?: {x:number;y:number;width:number;height:number}) {
   const browser = await chromium.launch();
-  try { return await compareOnPage(await browser.newPage(), first, second); }
+  try { return await compareOnPage(await browser.newPage(), first, second,region); }
   finally { await browser.close(); }
 }
 

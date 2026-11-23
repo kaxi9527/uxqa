@@ -23,7 +23,7 @@ export async function writeReports(result: RunResult, outDir: string): Promise<{
   const git = evidence?.product.git;
   const header = '| 需求 | 维度 | 检查 | 路由 | 视口 | 结果 | 说明 | 证据 |\n| --- | --- | --- | --- | --- | --- | --- | --- |';
   const lines = [
-    `# UXQA report: ${result.configName}`,
+    `# QA Master report: ${result.configName}`,
     '',
     `Status: **${summary.status.toUpperCase()}**`,
     `Blocking findings: ${summary.blocking}`,
@@ -33,7 +33,15 @@ export async function writeReports(result: RunResult, outDir: string): Promise<{
     '',
     '完成声明只覆盖下表“通过”的自动检查；“未验证”和“阻塞”项不能视为通过。',
     '',
-    '## 证据元数据',
+    '## 检查范围 / Coverage',
+    ...(result.coverage ? [
+      '', '浏览器实测 · 未扫描源码目录 / Browser run · no source directories scanned',
+      ...result.coverage.pages.map(p => '- ' + cell(p.route) + ' · ' + p.viewport + ' · ' + STATUS_LABELS[p.status]),
+      '', '跳过或未完成的检查 / Skipped or incomplete checks',
+      ...result.coverage.skippedChecks.map(c => '- ' + c.check + ' · ' + cell(c.route) + ' · ' + c.viewport + ' · ' + STATUS_LABELS[c.status] + ' · ' + cell(c.detail)),
+      ...(result.coverage.skippedChecks.length ? [] : ['无 / None']),
+    ] : ['历史运行未记录覆盖清单 / Coverage was not recorded for this run']),
+    '', '## 证据元数据',
     '',
     ...(evidence ? [
       `- 时间：${result.startedAt} → ${result.endedAt}`,
@@ -75,7 +83,7 @@ export async function writeReports(result: RunResult, outDir: string): Promise<{
     '',
     '## Artifacts',
     '',
-    'UXQA 登记的截图保留 48 小时，运行期间或下次启动时清理；报告保留。 / UXQA-registered screenshots are cleaned after 48 hours while UXQA runs or on its next launch; this report remains.',
+    'QA大师登记的截图保留 48 小时，运行期间或下次启动时清理；报告保留。 / QA Master–registered screenshots are cleaned after 48 hours while QA Master runs or on its next launch; this report remains.',
     '',
     ...(result.artifacts.length === 0 ? ['No artifacts.'] : result.artifacts.map((artifact) => `- ${artifact}`)),
   ];

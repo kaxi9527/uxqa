@@ -11,11 +11,15 @@ export type Target =
   | { css: string };
 
 export type Step =
+  | { action: 'firstTab'; lang: string }
+  | { action: 'beforeLanguageSwitch'; lang: string }
+  | { action: 'expectRecoveryResponse'; match: string }
   | { action: 'click'; target: Target }
   | { action: 'fill'; target: Target; value: string }
   | { action: 'press'; target: Target; key: string }
   | { action: 'selectOption'; target: Target; value: string }
   | { action: 'waitFor'; target: Target }
+  | { action: 'waitForHidden'; target: Target }
   | { action: 'expectVisible'; target: Target }
   | { action: 'keyboard'; key: string }
   | { action: 'expectHidden'; target: Target }
@@ -46,6 +50,8 @@ export interface NetworkRule {
 }
 
 export interface FlowConfig {
+  scenario?: InteractionScenario;
+  preparationSteps?: number;
   name: string;
   route?: string;
   requirement?: string;
@@ -55,6 +61,9 @@ export interface FlowConfig {
   steps: Step[];
 }
 
+export const INTERACTION_SCENARIOS = ['failure-recovery', 'save-focus', 'language-entry'] as const;
+export type InteractionScenario = typeof INTERACTION_SCENARIOS[number];
+
 export interface JourneyList {
   container: string;
   rows: string;
@@ -63,19 +72,20 @@ export interface JourneyList {
   saveAs?: string;
   equals?: string;
   where?: Record<string, string>;
+  partitionWitness?: { field: string; baselines: Record<string,string> };
 }
 
 export interface BusinessJourney {
   name: string;
   requirement: string;
-  phases: Array<{ name: string; actor: string; route: string; steps: Step[]; list?: JourneyList; observe?: JourneyObservation[]; assert?: JourneyAssertion[] }>;
+  phases: Array<{ name: string; actor: string; route: string; steps: Step[]; exactRoute?: boolean; continueOnPage?: boolean; list?: JourneyList; observe?: JourneyObservation[]; requires?: JourneyAssertion[]; assert?: JourneyAssertion[] }>;
   gaps: string[];
 }
 
 export interface JourneyObservation {
   id: string;
   target: Target;
-  read: 'text' | 'value' | 'attribute';
+  read: 'text' | 'value' | 'attribute' | 'display';
   attribute?: string;
   as?: 'number';
 }
@@ -183,6 +193,11 @@ export interface RunEvidence {
 }
 
 export interface RunResult {
+  coverage?: {
+    sourceDirectories: string[];
+    pages: Pick<CheckResult, 'route' | 'viewport' | 'status'>[];
+    skippedChecks: Pick<CheckResult, 'check' | 'route' | 'viewport' | 'status' | 'detail'>[];
+  };
   configName: string;
   startedAt: string;
   endedAt: string;

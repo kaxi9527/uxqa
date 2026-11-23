@@ -108,7 +108,7 @@ export async function openAgentPreviews(entry: ProjectEntry, input: { route: unk
         } catch (error) { return error instanceof Error ? error.message : '方案预览未完成'; }
       }, { changes: variant.changes, moves: variant.moves });
       if (previewError) throw new Error(previewError);
-      await page.evaluate((name) => { document.title = `UXQA · ${name} · ${document.title}`; }, variant.name);
+      await page.evaluate((name) => { document.title = `QA Master · ${name} · ${document.title}`; }, variant.name);
     }
     registerAgentPreview(entry.id, browser);
     return { status: 'running' as const, route: target.pathname + target.search, selector: input.selector, variants: definitions.map((variant) => variant.name), proposals: variants, viewport: { width: 1200, height: 800 }, limitations: '各方案在独立浏览器上下文中临时修改现有元素，不写入项目；框架重渲染可能撤销修改。写请求和 WebSocket 已阻止，部分交互可能不可用；GET 也可能产生副作用，请使用测试环境。' };

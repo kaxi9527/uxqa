@@ -9,6 +9,48 @@ import { startConsole } from '../src/ui/server.js';
 import { addProject, newRoundId, saveRound, shotsDir, updateProject } from '../src/ui/store.js';
 import { writeAiSettings } from '../src/ai/model.js';
 
+it('replays a saved interaction on the original route and refreshes after navigating away', async () => {
+  const prior=process.env.UXQA_HOME,temp=await mkdtemp(join(tmpdir(),'uxqa-sample-replay-'));
+  process.env.UXQA_HOME=join(temp,'data');
+  let release: (()=>void)|undefined, pause:Promise<void>|undefined;
+  const preview=createServer(async (req,res)=>{
+    if (req.url==='/items') {if(pause)await pause;res.end('ready');return;}
+    res.setHeader('content-type','text/html;charset=utf-8');
+    res.end('<html lang="en"><title>Sample</title><main><h1>Items</h1><p id="error" hidden>Offline</p><p id="items" hidden>Ready</p><button id="retry">Retry</button></main><script>async function load(){const r=await fetch("/items");error.hidden=r.ok;items.hidden=!r.ok}retry.onclick=load;load()</script></html>');
+  });
+  let app:Awaited<ReturnType<typeof startConsole>>|undefined,browser:Awaited<ReturnType<typeof chromium.launch>>|undefined;
+  try {
+    await mkdir(process.env.UXQA_HOME);await writeFile(join(process.env.UXQA_HOME,'access-settings.json'),JSON.stringify({locale:'en',onboardingDone:true,checks:[]}));
+    const root=join(temp,'sample');await mkdir(root);await writeFile(join(root,'package.json'),'{"name":"sample"}');
+    await writeFile(join(root,'View.tsx'),'export const View=()=> <main>Items</main>');
+    const project=await addProject(root,'Sample');await saveRound(project.id,await runCheck({source:root}));
+    await new Promise<void>(resolve=>preview.listen(0,'127.0.0.1',resolve));
+    const address=preview.address();if(!address || typeof address==='string')throw new Error('Missing preview port');
+    await updateProject(project.id,{pages:{baseUrl:'http://127.0.0.1:'+address.port,routes:['/'],discover:false}});
+    app=await startConsole({port:0});browser=await chromium.launch();const page=await browser.newPage(),url=new URL(app.url);
+    url.searchParams.set('project',project.id);await page.goto(url.href);
+    await page.getByLabel('Check category').selectOption('interaction');
+    const picker=page.getByLabel('Built-in interaction scenario'),route=page.getByLabel('Page route to sample');
+    await route.fill('/draft');await picker.selectOption('failure-recovery');
+    await page.getByLabel('GET request URL pattern').fill('**/items');await page.getByLabel('Error message',{exact:true}).fill('#error');
+    await page.getByLabel('Recovered content').fill('#items');await page.getByLabel('Retry button',{exact:false}).fill('#retry');
+    await page.getByRole('button',{name:'Run page sample'}).click();
+    const records=page.locator('summary[data-sample-result]');
+    await records.first().waitFor();expect(await records.first().textContent()).toContain('/draft');
+    expect(await picker.inputValue()).toBe('failure-recovery');expect(await route.inputValue()).toBe('/draft');
+    await records.first().click();pause=new Promise<void>(resolve=>{release=resolve;});
+    await page.getByRole('button',{name:'Rerun with these settings'}).click();
+    await page.getByRole('tab',{name:'Workflow',exact:true}).click();await page.getByRole('tab',{name:'Check',exact:true}).click();
+    await page.getByText('A sample is running. Results will appear automatically.').waitFor();
+    release!();
+    await records.nth(1).waitFor({timeout:45000});
+    expect(await records.first().textContent()).toContain('/draft · Recover after a failure · Pass');
+    expect(await page.getByLabel('Error message',{exact:true}).inputValue()).toBe('#error');
+    expect(await page.getByRole('button',{name:'Run page sample'}).isEnabled()).toBe(true);
+  } finally {release?.();await browser?.close();await app?.close();await new Promise<void>(done=>preview.close(()=>done()));
+    if(prior===undefined)delete process.env.UXQA_HOME;else process.env.UXQA_HOME=prior;await rm(temp,{recursive:true,force:true});}
+},90000);
+
 it('links a development contract, runs a grounded scenario and compares original design pixels with an observed round', async () => {
   const prior = process.env.UXQA_HOME, temp = await mkdtemp(join(tmpdir(), 'uxqa-assurance-'));
   process.env.UXQA_HOME = join(temp,'home');
@@ -84,7 +126,11 @@ it('links a development contract, runs a grounded scenario and compares original
     }
     await category.selectOption('accessibility');
     await page.getByRole('button',{name:'Run page sample'}).click();
-    await page.locator('.assurance-panel summary').filter({hasText:'Page sample · / ·'}).first().click();
+    const firstSample=page.locator('.assurance-panel summary').filter({hasText:'Page sample · / ·'}).first();
+    await firstSample.waitFor();
+    expect(await firstSample.textContent()).toContain('Unverified');
+    expect(await firstSample.evaluate(el=>el===document.activeElement)).toBe(true);
+    await firstSample.click();
     await page.getByText(/Unverified · screen-reader/).waitFor();
     await page.getByLabel('Page route to sample').fill('/missing'); await page.getByRole('button',{name:'Run page sample'}).click();
     await page.locator('summary').filter({hasText:'Page sample · /missing'}).click();

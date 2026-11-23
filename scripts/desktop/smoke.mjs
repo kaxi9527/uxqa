@@ -22,7 +22,7 @@ const fixture = createServer(async (req, res) => {
   const requestText = JSON.stringify(body);
   const fixtureAnswer = requestText.includes('FIXTURE_EDIT_TOKEN')
     ? JSON.stringify(requestText.includes('Updated src/Page.tsx') ? { type: 'answer', text: '已更新，请复检' } : requestText.includes('export const Page') ? { type: 'replace', path: 'src/Page.tsx', search: '>Test<', replace: '>Fixed<', reason: '修复示例页面按钮文案' } : { type: 'read', path: 'src/Page.tsx' })
-    : requestText.includes('你是 UXQA 项目专属 UI/UX') ? JSON.stringify({ type: 'answer', text: '项目对话连接正常' }) : '绿色';
+    : requestText.includes('你是 QA大师（QA Master）项目专属 UI/UX') ? JSON.stringify({ type: 'answer', text: '项目对话连接正常' }) : '绿色';
   requests.push({ path: req.url, image: JSON.stringify(body).includes('image') || JSON.stringify(body).includes('inlineData'), stream: body.stream ?? false });
   if (body.stream || req.url.includes(':streamGenerateContent')) {
     res.setHeader('content-type', 'text/event-stream');
@@ -104,7 +104,7 @@ try {
   await api('/ai', { mode: 'api', connection: 'direct', protocol: 'responses', baseUrl: `${base}/other`, model: 'vision-fixture', apiKey: '' });
   assert(!(await api('/ai')).settings.hasKey, 'Changing an endpoint must clear its old key');
   await page.getByRole('button', { name: '模型与账号', exact: true }).click();
-  await page.getByText('还没有在 UXQA 登录的订阅账号。', { exact: true }).waitFor();
+  await page.getByText('还没有在 QA大师 登录的订阅账号。', { exact: true }).waitFor();
   await page.getByRole('button', { name: '添加服务商', exact: true }).click();
   await page.getByLabel('服务商名称', { exact: true }).fill('UXQA local fixture');
   await page.getByLabel('接口协议', { exact: true }).selectOption('openai');

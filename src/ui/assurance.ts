@@ -4,11 +4,13 @@ import { basename, join } from 'node:path';
 import { assuranceCatalog } from '../guidance/assurance.js';
 import { comparePngs } from '../visual/compare.js';
 import { loadConfig } from '../config.js';
+import { INTERACTION_SCENARIOS } from '../types.js';
 import { runAudit } from '../runner.js';
 import { measureAgentMotion } from './agent-motion.js';
 import { checkedPath, ProjectAgentError } from './project-agent.js';
 import { dataDir, shotsDir, type ProjectEntry, type Round } from './store.js';
 import { evidenceImage, readEvidence } from './evidence.js';
+import {readInventory} from '../inventory/read.js';
 
 const hash = (data: Buffer) => createHash('sha256').update(data).digest('hex');
 const folder = (entry: ProjectEntry, kind: string) => join(dataDir(), 'projects', entry.id, 'assurance', kind);
@@ -26,7 +28,7 @@ const sampling = new Set<string>();
 export const isSampling = (entry: ProjectEntry) => sampling.has(entry.id);
 const sampleChecks: Record<string, string[]> = {
   accessibility: ['axe','axe-manual-review','keyboard-focus','reflow-320','zoom-200','reduced-motion','screen-reader','tab-order-logic'],
-  interaction: ['keyboard-focus','tab-order-logic'],
+  interaction: ['keyboard-focus','tab-order-logic', ...INTERACTION_SCENARIOS],
   compatibility: ['reflow-320','zoom-200','real-device'],
 };
 export async function samplePage(entry: ProjectEntry, round: Round, input: Record<string, unknown>) {
@@ -42,12 +44,15 @@ export async function samplePage(entry: ProjectEntry, round: Round, input: Recor
       return await saveRecord(entry, 'samples', { ...base, sample });
     }
     const selected = sampleChecks[suite];
+    const scenario = suite === 'interaction' && input.scenario ? Object.fromEntries(Object.entries(input.scenario).filter(([key])=>
+      ['type','setup','request','error','ready','retry','save','saved','continuation','switcher','option','lang','entry'].includes(key))) : undefined;
     const config = loadConfig({ name: suite, baseUrl: entry.pages.baseUrl, routes: [route], storageState: entry.pages.storageState,
+      scenarios: scenario ? [{...scenario, route}] : [],
       viewports: [{name:'desktop',width:1440,height:900},{name:'narrow',width:390,height:844}],
-      options: { axe: suite === 'accessibility', keyboard: selected.includes('keyboard-focus'), reflow: selected.includes('reflow-320'), reducedMotion: selected.includes('reduced-motion'), trace:'off', screenshots:false } });
+      options: { axe: suite === 'accessibility', keyboard: selected.includes('keyboard-focus'), reflow: selected.includes('reflow-320'), reducedMotion: selected.includes('reduced-motion'), trace:'on-failure', screenshots:false } });
     const result = await runAudit(config, { outDir: join(folder(entry,'sample-evidence'),id) });
     const checks = result.checks.filter(c => selected.includes(c.check) || c.check === 'page-load');
-    return await saveRecord(entry, 'samples', { ...base, checks, findings: result.findings, browser:result.evidence?.browser });
+    return await saveRecord(entry, 'samples', { ...base, ...(scenario ? {scenario}:{}), checks, findings: result.findings, coverage: result.coverage, browser:result.evidence?.browser });
   } catch (e) {
     return await saveRecord(entry, 'samples', { ...base, status:'blocked', reason: e instanceof Error ? e.message : String(e) });
   } finally { sampling.delete(entry.id); }
@@ -171,10 +176,22 @@ export async function compareDesign(entry: ProjectEntry, round: Round, input: Re
   if (expected.length !== 2 || observed.length !== 2 || !expected[0] || !expected[1] || expected[0] * expected[1] > 16_000_000) throw new ProjectAgentError(400, 'PNG 无效或画布过大。 / Invalid PNG or canvas exceeds 16 megapixels.');
   const base = { id: randomUUID(), at: new Date().toISOString(), roundId: round.id, reference, evidenceId, locator, route: view.route, viewportWidth: view.width, capture: basename(view.image), expected, observed, referenceDigest: hash(design), captureDigest: hash(actual) };
   if (expected[0] !== observed[0] || expected[1] !== observed[1]) return saveRecord(entry, 'comparisons', { ...base, status: 'unaligned' });
-  const result = await comparePngs(design, actual);
+  let region:{x:number;y:number;width:number;height:number}|undefined;
+  if(input.region){
+    const box=input.region as Record<string,number>;
+    if(![box.x,box.y,box.width,box.height].every(Number.isInteger)||box.x<0||box.y<0||box.width<1||box.height<1||box.x+box.width>expected[0]||box.y+box.height>expected[1])throw new ProjectAgentError(400,'区域超出画面 / Region is outside the frame');
+    region={x:box.x,y:box.y,width:box.width,height:box.height};
+  }
+  const center=region && {x:region.x+region.width/2,y:region.y+region.height/2};
+  const matched=center && view.regions?.filter(r=>center.x>=r.x&&center.x<r.x+r.width&&center.y>=r.y&&center.y<r.y+r.height).sort((a,b)=>a.width*a.height-b.width*b.height)[0];
+  const component=matched?.name || field(input.component,150);
+  const impacted=component?[...new Set(round.capture?.views?.filter(v=>v.regions?.some(r=>r.name===component)).map(v=>v.route))]:[];
+  const implementations=component?(await readInventory(entry.root)).components.filter(c=>c.name===component).map(c=>c.file):[];
+  const result = await comparePngs(design, actual,region);
   const diff = result.changed ? 'change-' + base.id.replaceAll('-', '').slice(0,10) + '.png' : undefined;
   if (diff) await writeFile(join(shotsDir(entry.id, round.id), diff), Buffer.from(result.diff.split(',')[1], 'base64'), { flag: 'wx', mode: 0o600 });
-  return saveRecord(entry, 'comparisons', { ...base, status: result.changed ? 'review' : 'matched', changedPixels: result.changed, totalPixels: expected[0] * expected[1], channelTolerance: 24, diff });
+  return saveRecord(entry, 'comparisons', { ...base, region,component,implementations,mapping:matched?'runtime':component?'manual':undefined,
+    state:field(input.state,100)||view.state,impacted,status: result.changed ? 'review' : 'matched', changedPixels: result.changed, totalPixels: region?region.width*region.height:expected[0]*expected[1], channelTolerance: 24, diff });
 }
 
 export async function designImage(entry: ProjectEntry, id: string) {

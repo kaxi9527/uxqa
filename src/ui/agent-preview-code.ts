@@ -147,7 +147,7 @@ export async function openAgentCodePreviews(entry: ProjectEntry, plan: CodePlan,
       const selected = page.locator(plan.selector);
       if (await selected.count() !== 1) throw new Error('选择器需要准确匹配一个页面元素');
       await selected.waitFor({ state: 'visible', timeout: 5_000 });
-      await page.evaluate((name) => { document.title = `UXQA · ${name} · ${document.title}`; }, variant.name);
+      await page.evaluate((name) => { document.title = `QA Master · ${name} · ${document.title}`; }, variant.name);
       results.push({ name: variant.name, applied: state.applied.size, runtimeErrors: state.runtimeErrors, consoleErrors: state.consoleErrors, failedRequests: state.failedRequests, blockedRequests: state.blockedRequests });
     }
     options.signal.throwIfAborted();

@@ -4,7 +4,10 @@ let accessSettings = { locale: null, onboardingDone: false, checks: [] };
 let accessDataLocation = '';
 const accessText = (zh, en) => accessSettings.locale === 'en' ? en : zh;
 function applyAccessLocale() {
+  document.title=accessText('QA大师','QA Master');
   document.documentElement.lang = accessSettings.locale === 'en' ? 'en' : 'zh-CN';
+  const skip = document.querySelector('a.skip');
+  if (skip) skip.textContent = accessText('跳到主要内容','Skip to main content');
   window.webkit?.messageHandlers?.uxqaLanguage?.postMessage(accessSettings.locale);
 }
 const accessStatus = (status) => ({
@@ -40,9 +43,9 @@ function accessPathForm(onChecked) {
 
 function accessExplanation() {
   return h('div', { class: 'stack' },
-    h('p', { text: accessText('UXQA 读取你选择的项目目录以检查源码。项目默认只读；保存规则、基线或组件同步时会单独说明。', 'UXQA reads the project folder you choose to inspect source files. Projects are read-only by default; saving rules, baselines, or component sync is explained separately.') }),
+    h('p', { text: accessText('QA大师 读取你选择的项目目录以检查源码。项目默认只读；保存规则、基线或组件同步时会单独说明。', 'QA Master reads the project folder you choose to inspect source files. Projects are read-only by default; saving rules, baselines, or component sync is explained separately.') }),
     h('p', { text: accessText(`项目列表、检查记录和账号配置保存在本机 ${accessDataLocation}。应用截图和已登记的命令行截图在 48 小时后自动清理；检查记录保留。可选的网页预览、浏览器下载和 AI 复核可能联网；AI 复核会发送选定截图及上下文。`, `Project lists, check records, and account settings are stored locally at ${accessDataLocation}. App screenshots and registered CLI screenshots are deleted after 48 hours; check records remain. Optional page previews, browser downloads, and AI review may use the network; AI review sends selected screenshots and context.`) }),
-    h('p', { class: 'muted', text: accessText('系统可能在访问桌面、文稿、下载或其他受保护位置时询问。macOS 通常记住选择，但授权可能被更改。UXQA 不需要摄像头、麦克风、辅助功能、全盘访问或系统录屏权限。', 'The system may ask before accessing Desktop, Documents, Downloads, or other protected locations. macOS usually remembers your choice, but permissions can change. UXQA does not need camera, microphone, accessibility, full-disk access, or screen-recording permissions.') }));
+    h('p', { class: 'muted', text: accessText('系统可能在访问桌面、文稿、下载或其他受保护位置时询问。macOS 通常记住选择，但授权可能被更改。QA大师 不需要摄像头、麦克风、辅助功能、全盘访问或系统录屏权限。', 'The system may ask before accessing Desktop, Documents, Downloads, or other protected locations. macOS usually remembers your choice, but permissions can change. QA Master does not need camera, microphone, accessibility, full-disk access, or screen-recording permissions.') }));
 }
 
 function openAccessOnboarding({ required = false } = {}) {
@@ -86,7 +89,7 @@ function openAccessOnboarding({ required = false } = {}) {
       if (panel.isConnected) panel.querySelector('button, input, select')?.focus();
     };
     render();
-  }, { label: 'UXQA setup', dismissible: !required });
+  }, { label: 'QA Master setup', dismissible: !required });
 }
 
 function renderAccessPanel(panel) {
@@ -107,7 +110,7 @@ function renderAccessPanel(panel) {
         event.currentTarget.disabled = true; try { accessSettings = await api('/access/forget', { method: 'POST', body: { path: item.path } }); renderRail(); draw(); } catch (error) { toast(error.message); event.currentTarget.disabled = false; }
       } }, accessText('移除记录', 'Forget record'))))))
       : h('p', { class: 'muted', text: accessText('尚未检查任何项目位置。', 'No project locations have been checked.') }),
-    accessPathForm(draw), h('p', { class: 'faint', text: accessText('若访问被拒绝，请在系统隐私与安全设置中检查 UXQA 的文件与文件夹权限，再点击检查。目录移动或网络卷断开也会导致无法访问。', 'If access is denied, review UXQA under your system privacy and security settings, then check again. Moved folders or disconnected network volumes can also become unavailable.') }),
+    accessPathForm(draw), h('p', { class: 'faint', text: accessText('若访问被拒绝，请在系统隐私与安全设置中检查 QA大师 的文件与文件夹权限，再点击检查。目录移动或网络卷断开也会导致无法访问。', 'If access is denied, review QA Master under your system privacy and security settings, then check again. Moved folders or disconnected network volumes can also become unavailable.') }),
     h('button', { class: 'btn', type: 'button', onclick: () => openAccessOnboarding() }, accessText('重新查看首次引导', 'Review setup')));
   draw();
 }

@@ -81,6 +81,7 @@ export interface SourceAudit {
 }
 
 export interface ComponentAudit {
+  scanScope?: { directories: Record<string,number>; gaps: string[] };
   name: string;
   startedAt: string;
   endedAt: string;

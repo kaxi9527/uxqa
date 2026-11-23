@@ -68,7 +68,7 @@ export function appendCatalog(catalog: NativeCatalog, component: ComponentDefini
     variantAxes:component.variants,states:component.states,slots:[],
     accessibility:component.accessibility,anatomy:component.anatomy,behavior:component.behavior,
     usage:component.usage,antiUsage:component.antiUsage,
-    decision:`UXQA local verification passed; specification: ${specification}. Product approval gates still apply.`,
+    decision:`QA Master local verification passed; specification: ${specification}. Product approval gates still apply.`,
   };
   const insertion = `${catalog.needsComma ? ',':''}\n  ${JSON.stringify(record,null,2).split('\n').join('\n  ')},`;
   const at = catalog.insertAt!;

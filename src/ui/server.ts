@@ -33,8 +33,12 @@ import { ENGLISH_FOCUS_TITLES } from '../guidance/diagnostics.en.js';
 import { STACK_KNOWLEDGE } from '../guidance/context.js';
 import { createAssurancePlan, createDiagnosis, listDiagnoses } from './diagnosis.js';
 import { assuranceCatalog } from '../guidance/assurance.js';
-import { calibrationMetrics, createReviewCase, reviewWorkspace, updateReviewCase } from './calibration.js';
-import { listEvidence, importEvidence, inspectRemoteCode, readCodeLink } from './evidence.js';
+import { coverageLines } from '../check/coverage.js';
+import { requirementChecks } from '../requirement-checks.js';
+import { settledDisagreements, calibrationMetrics, createReviewCase, reviewWorkspace, updateReviewCase } from './calibration.js';
+import { listEvidence, importEvidence, inspectRemoteCode, readCodeLink, evidenceImage } from './evidence.js';
+import { taskAction, taskBoard, taskDrafts, taskRepairContext, taskWorkspace } from './acceptance-tasks.js';
+import { projectStorage } from './project-storage.js';
 import { exportBoard } from './board-export.js';
 import { addClause, addUsabilitySession, compareDesign, currentClauses, designImage, inspectDocument, isSampling, readRecords, removeClause, samplePage } from './assurance.js';
 import { getDiagnosisVerification, recordDiagnosisVerification, VerificationError } from './diagnosis-verification.js';
@@ -42,6 +46,7 @@ import { forgetAccessCheck, readAccessSettings, recordAccessCheck, recheckPrevio
 import { availableRoundScreenshots, cleanExpiredScreenshots, expiredScreenshotNames } from './screenshot-retention.js';
 import { englishUiError } from './errors.en.js';
 import { issueGuidance } from '../guidance/issues.js';
+import { boardCommand, boardEvidence, boardView } from './workflow-board.js';
 import type { IssueDomain } from '../guidance/types.js';
 import { readIssueWorkflow, setIssueDisposition, addObservation, recheckComparison, roundForWorkflow, ISSUE_STATES, type IssueState } from './issue-workflow.js';
 import { addProject, dataDir, getRound, listProjects, listRounds, newRoundId, removeProject, saveRound, shotsDir, updateProject, type PageSettings, type ProjectEntry, type Round } from './store.js';
@@ -199,6 +204,20 @@ function publicJob(job: Job) {
   return rest;
 }
 
+async function startCheckJob(entry:ProjectEntry,skipPages:boolean){
+  const checked=await recordAccessCheck(entry.root);
+  const access=checked.checks.find(item=>item.path===entry.root);
+  if(access && access.result!=='accessible')throw new HttpError(403,`无法读取项目位置：${entry.root}。位置可能已移动、不可用或访问被拒绝；请在设置中检查访问状态。`);
+  if(entry.pages?.baseUrl && !skipPages && !(await browserReady('shell').catch(()=>true))){
+    return {conflict:{error:'给页面截图需要先下载浏览器组件',browser:await browserInfo('shell')}};
+  }
+  const running=[...jobs.values()].find(j=>j.projectId===entry.id && j.state==='running');
+  if(running)return {conflict:{error:'这个项目正在检测中，请等它完成或先取消',job:publicJob(running)}};
+  const job:Job={id:randomBytes(6).toString('hex'),projectId:entry.id,state:'running',phase:'source',message:'准备开始',done:0,total:0,controller:new AbortController()};
+  jobs.set(job.id,job);
+  return {job,finished:runJob(job,entry,skipPages)};
+}
+
 async function runJob(job: Job, entry: ProjectEntry, skipPages = false): Promise<void> {
   try {
     const round = await runRound(entry, {
@@ -293,6 +312,7 @@ function clientRound(round: Round, locale: 'zh' | 'en' | null) {
   return {
     ...round,
     assuranceFamilies: assuranceCatalog(locale).map(({id,title}) => ({id,title})),
+    coverageLines: coverageLines(round.result, locale === 'en' ? 'en' : 'zh'),
     ...(round.partial === MISSING_SENTENCE ? { partialCode: 'browser-missing' } : {}),
     ...(locale === 'en' && round.partial === MISSING_SENTENCE ? { partial: 'No screenshots this round: the browser component is not installed. Source checks completed; start another check and confirm the download, or run uxqa browser install.' } : {}),
     result: { ...round.result, violations: round.result.violations.map((violation) => {
@@ -444,8 +464,56 @@ async function route(request: IncomingMessage, response: ServerResponse, path: s
   if (parts[0] !== 'projects' || !parts[1]) throw new HttpError(404, '没有这个接口');
   const entry = await project(parts[1]);
   const action = parts[2];
+  if(action==='acceptance-tasks'){
+    if(method==='GET' && parts.length===5 && parts[3]==='repair-context')return send(response,200,taskRepairContext(entry,parts[4]));
+    if(method==='GET' && parts.length===4 && parts[3]==='board')return send(response,200,taskBoard(entry));
+    if(method==='GET'&&parts[3]==='failed'){
+      const round=new URL(request.url??'','http://localhost').searchParams.get('round');
+      return send(response,200,{tasks:taskWorkspace(entry).tasks.filter(t=>{const a=t.attempts.at(-1);return a?.roundId===round&&a.status==='fail';}).map(t=>({id:t.id,title:t.action}))});
+    }
+    if(method==='GET' && parts[3]==='image' && parts[4]){
+      const {bytes}=await evidenceImage(entry,parts[4]);
+      response.writeHead(200,{'content-type':'image/png','cache-control':'no-store'});response.end(bytes);return;
+    }
+    if(method==='GET' && parts.length===3){
+      const state=taskWorkspace(entry);
+      const plans=(await getProjectAgent(entry.id)).messages.filter(m=>m.kind==='journey-plan').map(m=>({id:m.id,clauseId:(m.data?.clause as {id?:string})?.id,plan:m.data?.plan}));
+      return send(response,200,{...state,plans,requirementChecks,disagreements:await settledDisagreements(entry),importedDocuments:(await listEvidence(entry)).filter(s=>s.kind==='text'&&s.count).length,calibration:await calibrationMetrics(entry.id)});
+    }
+    if(method==='POST' && parts[3]==='drafts')return send(response,200,await taskDrafts(entry,await accessBody(request)));
+    if(method==='POST' && parts.length===3){await taskAction(entry,await accessBody(request));return send(response,200,{saved:true});}
+  }
+  if(action==='project-storage' && parts.length===3){
+    if(method==='GET')return send(response,200,await projectStorage(entry));
+    if(method==='POST'){
+      const {clean}=await accessBody(request);
+      if(clean!=='screenshots' && clean!=='traces')throw new HttpError(400,'请选择媒体类型 / Select a media type');
+      if(isSampling(entry)||[...jobs.values()].some(job=>job.projectId===entry.id&&job.state==='running')||boardView(entry).busy||taskWorkspace(entry).busy||(await getProjectAgent(entry.id)).running)throw new HttpError(409,'任务运行中，请稍后清理 / Wait for the running task');
+      return send(response,200,await projectStorage(entry,clean));
+    }
+  }
 
+  if(action==='workflow-board' && method==='GET' && parts.length===4 && parts[3]==='evidence'){
+    return send(response,200,{items:await boardEvidence(entry)});
+  }
+  if(action==='workflow-board' && parts.length===3){
+    if(method==='GET')return send(response,200,boardView(entry));
+    if(method==='POST'){
+      const input=await body(request);
+      const evidence=input.action==='adopt'?(await boardEvidence(entry)).find(r=>r.ref===input.ref):undefined;
+      const result=boardCommand(entry,input,async(project,sourceOnly)=>{
+        const started=await startCheckJob(project,sourceOnly);
+        if(started.conflict)throw new Error(started.conflict.error);
+        await started.finished;
+        const round=started.job.state==='done' && started.job.roundId && await getRound(project.id,started.job.roundId);
+        if(!round)throw new Error(started.job.error || '检测未完成 / Check did not finish');
+        return round;
+      },evidence);
+      return send(response,200,result);
+    }
+  }
   if (action === 'assurance') {
+    if (method === 'GET' && parts[3] === 'sample-status' && parts.length === 4) return send(response, 200, {sampling:isSampling(entry)});
     if(parts[3]==='reviews'){
       const locale=(await readAccessSettings()).locale;
       if(method==='GET' && parts.length===5 && parts[4]==='metrics')return send(response,200,{groups:await calibrationMetrics()});
@@ -611,19 +679,9 @@ async function route(request: IncomingMessage, response: ServerResponse, path: s
     return send(response, 200, { round: clientRound({ ...available, result: combined }, locale), prompt: locale === 'en' ? formatEnglishPrompt(combined) : formatPrompt(combined), promptFirst: locale === 'en' ? formatEnglishPrompt(combined, { limit: FIRST_BATCH }) : formatPrompt(combined, { limit: FIRST_BATCH }), prompts, review, workflow, issueStates: ISSUE_STATES });
   }
   if (method === 'POST' && action === 'check') {
-    const running = [...jobs.values()].find((job) => job.projectId === entry.id && job.state === 'running');
-    if (running) return send(response, 409, { error: '这个项目正在检测中，请等它完成或先取消', job: publicJob(running) });
-    const checked = await recordAccessCheck(entry.root);
-    const access = checked.checks.find((item) => item.path === entry.root);
-    if (access && access.result !== 'accessible') throw new HttpError(403, `无法读取项目位置：${entry.root}。位置可能已移动、不可用或访问被拒绝；请在设置中检查访问状态。`);
-    const skipPages = (await body(request)).skipPages === true;
-    if (entry.pages?.baseUrl && !skipPages && !(await browserReady('shell').catch(() => true))) {
-      return send(response, 409, { error: '给页面截图需要先下载浏览器组件', browser: await browserInfo('shell') });
-    }
-    const job: Job = { id: randomBytes(6).toString('hex'), projectId: entry.id, state: 'running', phase: 'source', message: '准备开始', done: 0, total: 0, controller: new AbortController() };
-    jobs.set(job.id, job);
-    void runJob(job, entry, skipPages);
-    return send(response, 202, { job: publicJob(job) });
+    const started=await startCheckJob(entry,(await body(request)).skipPages===true);
+    if(started.conflict)return send(response,409,started.conflict);
+    return send(response,202,{job:publicJob(started.job)});
   }
   if (method === 'POST' && action === 'rounds' && parts[3] && parts[4] === 'ai-review') {
     const settings = await readAiSettings();

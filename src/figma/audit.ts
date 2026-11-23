@@ -116,7 +116,8 @@ export function auditFigma(index: FigmaIndex, chunks: FigmaChunk[], inputHashes:
   return {
     schemaVersion: 1, source: { schemaVersion: 1, exportId: index.exportId, fileKey: index.fileKey, pageId: index.pageId, capturedAt: index.capturedAt, pageName: index.pageName, captureEnd, inputHashes },
     status: missingIds.length ? 'partial' : 'complete', verdict: summary.fail ? 'issues-found' : missingIds.length || summary.review || summary['not-verified'] ? 'needs-review' : 'limited-pass',
-    coverage: { expectedComponents: index.componentIds.length, capturedComponents: components.length, missingIds, themes: index.themes }, summary, checks, catalog, mergeCandidates,
+    coverage: { expectedComponents: index.componentIds.length, capturedComponents: components.length, missingIds, themes: index.themes,
+      sourceDirectories: [], skippedRules: [...new Set(checks.filter(c => c.status === 'excluded' || c.status === 'not-verified').map(c => c.rule))] }, summary, checks, catalog, mergeCandidates,
     limitations: [
       '仅审计索引中的原生组件主件；页面中的独立实例、模板组合和运行时代码不包含在此覆盖中。',
       '分批采集不是原子快照；报告记录采集窗口和每个输入文件哈希。重新设计后必须重新采集。',

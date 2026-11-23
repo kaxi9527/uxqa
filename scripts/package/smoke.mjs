@@ -23,7 +23,7 @@ const home = join(work, 'home');
 await mkdir(home);
 if (archive.endsWith('.zip')) spawnSync('unzip', ['-q', resolve(archive), '-d', work], { stdio: 'inherit' });
 else spawnSync('tar', ['-xzf', resolve(archive), '-C', work], { stdio: 'inherit' });
-const top = (await readdir(work)).find((name) => name.startsWith('uxqa-'));
+const top = (await readdir(work)).find((name) => name.startsWith('qa-master-') || name.startsWith('uxqa-'));
 if (!top) throw new Error('包里没有 uxqa-* 文件夹');
 const dir = join(work, top);
 const win = process.platform === 'win32';
