@@ -85,6 +85,9 @@ function exitCode(result: CheckResult, strict: boolean): number {
 
 export async function runSourceCommand(argv: string[], io: { stdin?: string } = {}): Promise<number> {
   const [command, ...rest] = argv;
+  if(command==='ui'&&rest.some(arg=>arg==='--help'||arg==='-h')){
+    console.log('uxqa ui [--port <port>] [--no-open]\n打开本机控制台，导入项目内外的文档、核对并绑定验收任务。项目预览设置可打开浏览器登录，确认后保存本地登录态。\nOpen the local console for document import, reviewed acceptance tasks and local sign-in. --no-open keeps the console running without opening a window.');return 0;
+  }
   const sub = command === 'hook' ? rest.shift() : undefined;
   const flags = parse(rest);
   if (flags.switches.has('--help') || flags.switches.has('-h')) { console.log(HELP); return 0; }

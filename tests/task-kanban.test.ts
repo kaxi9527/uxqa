@@ -43,7 +43,8 @@ it('passes the built-in interaction scenarios against UXQA itself',async()=>{
       {type:'language-entry',route:settings,setup:[{action:'selectOption',target:css('.access-panel select'),value:'zh'},
         {action:'waitFor',target:css('html:lang(zh) .access-panel select')}],switcher:css('.access-panel select'),option:'en',lang:'en',entry:{role:'link',name:'Skip to main content'}},
     ];
-    const result=await runAudit(loadConfig({baseUrl:url.origin,routes:[board,settings],scenarios,viewports:[{name:'desktop',width:1280,height:800}],
+    const readiness=Object.fromEntries([board,settings].map(route=>[route,{selector:'html[data-qa-ready="true"] #workspace h1'}]));
+    const result=await runAudit(loadConfig({baseUrl:url.origin,routes:[board,settings],readiness,scenarios,viewports:[{name:'desktop',width:1280,height:800}],
       options:{axe:false,keyboard:false,reflow:false,reducedMotion:false,trace:'off',screenshots:false}}),{outDir:join(dataDir(),'self-check')});
     const observed=result.checks.filter(c=>scenarios.some(s=>s.type===c.check));
     expect(observed.map(c=>[c.check,c.status]),observed.filter(c=>c.status!=='pass').map(c=>c.detail.replace(/#t=[^\s]+/g,'[session]')).join('\n')).toEqual(
@@ -132,7 +133,10 @@ it('uses the default project board to create, prioritize, drag, record evidence,
     await p.reload();await p.locator('.kb-unfixed .P0').waitFor();
     await p.getByRole('button',{name:'Workflow builder',exact:true}).click();await p.getByRole('button',{name:'Step by step',exact:true}).waitFor();
     await p.getByRole('button',{name:'Status board',exact:true}).click();await p.setViewportSize({width:390,height:844});
-    expect(await p.locator('.kb-lanes').evaluate(el=>el.scrollWidth>el.clientWidth)).toBe(true);
+    const stage=p.getByLabel('View stage');
+    await stage.selectOption('unfixed');
+    expect(await p.locator('.kb-lane:visible').getAttribute('data-stage')).toBe('unfixed');
+    expect(await p.locator('.kb-lanes').evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);
     expect(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
   }finally{await browser.close();await server.close();await f.close();}
 },50000);

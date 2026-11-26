@@ -98,7 +98,7 @@ it('links a development contract, runs a grounded scenario and compares original
     await page.getByRole('button',{name:'Save source'}).click();
     await page.locator('.assurance-panel summary').filter({hasText:'contract.md'}).click();
     await page.getByText('File verified · L2').waitFor();
-    await page.getByRole('button',{name:'Create verification tasks'}).click();
+    await page.getByRole('button',{name:'Plan a review for this run'}).click();
     await page.locator('.verification-task').first().waitFor(); expect(await page.locator('.verification-task').count()).toBe(3);
     await page.keyboard.press('Escape');
     await page.getByRole('button',{name:'Prepare scenario with selected model'}).click();

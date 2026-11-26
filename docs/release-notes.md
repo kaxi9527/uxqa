@@ -1,3 +1,15 @@
+## QA Master 0.8.1 · QA大师
+
+**Requirements.** Import a Markdown document, save a requirement, bind a page action and expected result, and run it from the workbench. The CLI can read Markdown via `uxqa requirements --file` and report the original line and binding status.
+
+**Verification.** Wait for a visible readiness marker before checking asynchronous pages. Reports summarize all route checks and identify missing prerequisites. Locator failures can show the actual role of a similarly named control. Source rules continue to run when a conventionally named library folder contains no recognized components.
+
+**Figma.** A read-only development plugin can download a page capture for local import. Coverage distinguishes captured components, the index and the page inventory. Prototype reports trace navigation, broken destinations and explicitly identified cross-screen facts.
+
+**Workspace.** Compact windows have page and board-stage selectors. Finding details group secondary actions, and saving a requirement puts keyboard focus on the confirmation. Settings displays the running version. Explicit CLI export folders retain screenshots by default. Add `--expire-screenshots` to opt into 48-hour cleanup.
+
+Choose the archive for your OS under **Assets**. Verify it against `SHA256SUMS.txt` and follow the [English installation guide](https://github.com/kaxi9527/uxqa/blob/v0.8.1/docs/install-and-use.en.md) or the [中文安装说明](https://github.com/kaxi9527/uxqa/blob/v0.8.1/docs/install-and-use.md). [中文更新说明](https://github.com/kaxi9527/uxqa/blob/v0.8.1/docs/release-notes.zh-CN.md)
+
 ## QA Master 0.8.0 · QA大师
 
 Start in **Check → Logic → Check a requirement**. Choose a passage from your project documentation and bind the test pages and controls. Three built-in checks follow a published setting to its readers, compare assignments by recipient and item after cancel or confirm, and verify what happens to an edit when you leave and return. Each result links to its evidence. Missing prerequisites remain unverified.

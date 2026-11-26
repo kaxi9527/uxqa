@@ -30,15 +30,16 @@ function assuranceCenter() {
         const samples = data.samples.filter(item => item.roundId === round?.id && item.suite === active.id).sort((a,b) => b.at.localeCompare(a.at));
         const results = data.comparisons.filter(c => c.roundId === round?.id).sort((a,b) => b.at.localeCompare(a.at));
         const plans = history.plans.filter(p => p.roundId === round?.id && p.focus === active.id && p.knowledgeVersion === 'uxqa-assurance-1');
+        const canReviewRequirement = active.id==='logic' || (data.sources??[]).some(source=>source.kind==='text'&&source.count);
         const actions = h('div', { class: 'quality-actions' },
-          antButton(t('新建验证任务','Create verification tasks'), async event => {
+          canReviewRequirement?antButton(t('从需求开始验收','Check a requirement'),()=>taskDesk(projectId),{type:'primary'}):null,
+          round?antButton(t('为本轮创建复核计划','Plan a review for this run'), async event => {
             const button = event.currentTarget; button.disabled = true;
             try {
               const { plan } = await api(endpoint + '/plan', { method: 'POST', body: { suite: active.id, roundId: round.id } });
               if (panel.isConnected) { history.plans.unshift(plan); draw(); showDiagnosisPlan(plan, 'verification'); }
             } catch (e) { fail(e); button.disabled = false; }
-          }, { type: 'primary', disabled: !round }),
-          active.id==='logic'?antButton(t('从需求开始验收','Check a requirement'),()=>taskDesk(projectId)):null,
+          }, { type: canReviewRequirement?'default':'primary' }):null,
           antButton(t('关联文档条款','Link a source clause'), () => editAssuranceSource(endpoint, active, data.suites, refresh)),
           active.id === 'fidelity' ? antButton(t('对比设计稿','Compare design frame'), () => compareAssuranceFrame(endpoint, round, refresh), { disabled: !round }) : null);
         fill(panel, h('label', { class: 'workflow-field' }, t('检测类别','Check category'), select),

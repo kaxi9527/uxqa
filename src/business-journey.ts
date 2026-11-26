@@ -1,5 +1,6 @@
 import type { Browser, BrowserContext, Page, Request } from 'playwright';
 import { executeStep } from './steps.js';
+import { checkPageAccess, waitForPageReadiness } from './page-access.js';
 import { evaluateRelation, observeValue, type ObservedValue, type LogicVerdict } from './journey-logic.js';
 import type { BusinessJourney, CheckResult, JourneyList } from './types.js';
 
@@ -45,6 +46,8 @@ function rowDifferences(expected: Row[], actual: Row[]): Array<[string,number]> 
 
 export async function runBusinessJourney(browser: Browser, baseUrl: string, plan: BusinessJourney, options: {
   actorStates?: Record<string, string>; restrictToPreview?: boolean;
+  readySelector?: string;
+  readiness?: Record<string,{selector:string;timeoutMs:number}>;
 } = {}): Promise<PhaseResult[]> {
   const sessions = new Map<string, { context: BrowserContext; page: Page }>();
   const snapshots = new Map<string, Row[]>();
@@ -107,8 +110,11 @@ export async function runBusinessJourney(browser: Browser, baseUrl: string, plan
             if (page.url() !== target.href) throw new MissingWitness('原操作页面已变化 / Original page is no longer active');
           } else {
             const response = await page.goto(target.href, { waitUntil: 'load' });
+            await checkPageAccess(page,target.href,response);
             if (!response?.ok() || new URL(page.url()).origin !== target.origin) throw new Error('Test page unavailable for actor: ' + phase.actor);
             if (phase.exactRoute && page.url()!==target.href) throw new MissingWitness('未到达绑定的页面 / Bound route was not reached: '+phase.route);
+            const readiness=options.readiness?.[phase.route];
+            await waitForPageReadiness(page,readiness?.selector??options.readySelector,readiness?.timeoutMs);
           }
           for (const step of phase.steps) {
             assertion = step.action.startsWith('expect');

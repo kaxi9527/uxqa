@@ -78,6 +78,25 @@ function requirementForm(catalog,task,run,t,busy) {
       return ()=>Object.fromEntries(Object.entries(elements).map(([key,input])=>[key,input.value]));
     }
     const form=h('form',{class:'assurance-form'}),read=inputs(spec.fields,form),rows=new Map();
+    let readBehavior;
+    if(select.value==='page-behavior'){
+      const action=h('select',{class:'input','aria-label':t('页面操作','Page action')},[['none','无需操作','No action'],['click','点击','Click'],['fill','填写','Fill']].map(([value,zh,en])=>h('option',{value,text:t(zh,en)})));
+      const assertion=h('select',{class:'input','aria-label':t('预期结果','Expected result')},[['visible','结果可见','Visible'],['text','文字完全匹配','Exact text'],['hidden','操作后隐藏','Hidden after action']].map(([value,zh,en])=>h('option',{value,text:t(zh,en)})));
+      const target=h('input',{class:'input',placeholder:'#open'}),value=h('input',{class:'input'}),text=h('input',{class:'input'});
+      const targetRow=reviewField(t('操作对象 CSS 选择器','Action CSS selector'),target);
+      const valueRow=reviewField(t('输入值','Value to fill'),value);
+      const textRow=reviewField(t('预期看到的文字','Expected visible text'),text);
+      const sync=()=>{
+        targetRow.hidden=action.value==='none';target.required=!targetRow.hidden;
+        valueRow.hidden=action.value!=='fill';
+        textRow.hidden=assertion.value!=='text';text.required=!textRow.hidden;
+        assertion.options[2].disabled=action.value==='none';
+        if(assertion.options[2].disabled&&assertion.value==='hidden'){assertion.value='visible';textRow.hidden=true;text.required=false;}
+      };
+      action.onchange=assertion.onchange=sync;sync();
+      append(form,[reviewField(t('页面操作','Page action'),action),targetRow,valueRow,reviewField(t('预期结果','Expected result'),assertion),textRow]);
+      readBehavior=()=>({action:action.value,target:target.value,value:value.value,assertion:assertion.value,text:text.value});
+    }
     if(spec.group){
       const group=h('fieldset',{class:'stack-tight'},h('legend',{text:t(...spec.group.title)}));
       const add=()=>{
@@ -92,7 +111,7 @@ function requirementForm(catalog,task,run,t,busy) {
     if(select.value==='return-state')form.append(reviewField(t('返回后的预期','Expected on return'),outcome));
     const save=h('button',{type:'submit',class:'btn primary',disabled:busy,text:t('保存并绑定方案','Save and bind plan')});
     form.onsubmit=e=>{
-      e.preventDefault();const binding={kind:select.value,...read()};
+      e.preventDefault();const binding={kind:select.value,...read(),...readBehavior?.()};
       if(spec.group)binding[spec.group.key]=[...rows.values()].map(readRow=>readRow());
       if(select.value==='return-state')binding.outcome=outcome.value;
       run('prepare-requirement',{id:task.id,binding},save);
@@ -127,7 +146,11 @@ function taskDesk(projectId,initialId,regionId,fingerprint,issueRound,baselineId
           h('p',{text:t('导入到首次有效运行，中位耗时','Median import to first conclusive run')+' · '+(m.timed?Math.round(m.medianMs/1000)+' s':'—')+' · '+m.timed+'/'+data.importedDocuments+t(' 份正文文档',' text documents')}),
           h('p',{text:t('原场景复检通过','Repairs verified on the same scenario')+' · '+m.verified+'/'+m.repairs+' · '+t('待验证 ','Unverified ')+m.unverified}),
           calibration.length?calibration.map(g=>h('p',{text:[g.suite,g.model,g.configuration.slice(0,8),t('误报','False alarms')+' '+rate(g.counts.falseAlarms,g.counts.humanPasses),t('漏报','Misses')+' '+rate(g.counts.missedIssues,g.counts.humanIssues),t('盲测严重漏放','Held-out blockers among model passes')+' '+rate(g.counts.escapedBlockers,g.counts.reviewedPasses),t('待双评 / 裁定 ','Pending / disputed ')+g.counts.pending+' / '+g.counts.unresolved].join(' · ')})):h('p',{text:t('严重漏放：尚无独立盲测样本','Escaped blockers · No held-out samples')}));
-        const add=sources.length?h('div',{class:'quality-actions'},source,antButton(t('从文档生成任务','Generate tasks from document'),()=>draftTasks(projectId,sources.find(s=>s.id===source.value),load))):
+        const add=sources.length?h('div',{class:'quality-actions'},source,antButton(t('从文档生成任务','Generate tasks from document'),()=>{
+          const selectedSource=sources.find(s=>s.id===source.value);
+          close(false);
+          draftTasks(projectId,selectedSource);
+        })):
           h('p',{class:'muted',text:t('在项目检查中拖入需求文档后，可以从原文生成任务。','Drop a requirements document in Check to generate tasks from its passages.')});
         fill(body,add,insights,task?picker:null);
         if(data.disagreements.length)body.append(h('details',{},h('summary',{text:t('优先复盘','Priority reviews')+' · '+data.disagreements.length}),data.disagreements.map(r=>
@@ -223,8 +246,14 @@ function draftTasks(projectId,source,refresh=()=>{}){
           const controls={};
           const form=h('form',{class:'assurance-form',onsubmit:async e=>{
             e.preventDefault();const btn=e.submitter;btn.disabled=true;
-            try{await api(base,{method:'POST',body:{op:'create',...d,...Object.fromEntries(Object.entries(controls).map(([k,v])=>[k,v.value]))}});
-              form.replaceWith(h('p',{role:'status',text:t('任务已保存到工作流','Task saved to workflow')}));await refresh();
+            try{const {createdTaskId}=await api(base,{method:'POST',body:{op:'create',...d,...Object.fromEntries(Object.entries(controls).map(([k,v])=>[k,v.value]))}});
+              const saved=h('p',{role:'status',tabindex:'-1',text:t('任务已保存到工作流','Task saved to workflow')});
+              form.replaceWith(saved,antButton(t('绑定此任务','Bind this task'),()=>{
+                close(true);
+                taskDesk(projectId,createdTaskId);
+              }));
+              saved.focus();
+              await refresh();
             }catch(err){status.textContent=err.message;btn.disabled=false;}
           }});
           for(const [key,zh,en] of [['actor','谁','Who'],['condition','什么条件下','Conditions'],['action','做什么','Action'],['expected','应该看到什么','Expected result']]){
@@ -232,7 +261,7 @@ function draftTasks(projectId,source,refresh=()=>{}){
             form.append(reviewField(t(zh,en),controls[key]));
           }
           form.append(h('button',{class:'btn primary',type:'submit',text:t('保存任务','Save task')}));
-          return h('details',{open:data.drafts.length===1},h('summary',{text:d.locator+' · '+(d.action||d.quote.slice(0,65))}),h('blockquote',{text:d.quote}),form);
+          return h('details',{open:data.drafts.length===1},h('summary',{text:d.locator+' · '+(d.action||d.quote.slice(0,65))}),h('p',{text:d.expected?t('候选预期，需人工确认并绑定','Candidate expectation · needs review and binding'):t('未抽取预期，需人工绑定','Expectation not extracted · manual binding needed')}),h('blockquote',{text:d.quote}),form);
         }),h('div',{class:'quality-actions'},offset?antButton(t('上一组','Previous'),()=>{offset-=25;show();}):null,offset+25<data.total?antButton(t('下一组','Next'),()=>{offset+=25;show();}):null));
       }catch(e){status.textContent=e.message;}
     }

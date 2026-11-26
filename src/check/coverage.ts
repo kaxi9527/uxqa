@@ -32,7 +32,7 @@ export function coverageLines(result: CheckResult, language: 'en' | 'zh' = 'zh')
   if (Object.keys(c.contextDirectories).length) lines.push((en ? 'Additional context only (files) · ' : '仅作比对的其他目录（文件数）· ') + dirs(c.contextDirectories));
   if (c.excludedDirectories.length) lines.push((en ? 'Excluded directories · ' : '遍历时排除的目录 · ') + c.excludedDirectories.join(', '));
   if (c.reachedFileLimit) lines.push(en ? 'File discovery reached its limit. Coverage may be incomplete.' : '已达文件遍历上限，覆盖可能不完整。');
-  if (result.library.source === 'convention' && !result.library.components && !result.library.tokens) lines.push(en ? 'Library inferred from its path; no components or tokens identified.' : '组件库由目录惯例推断，识别到 0 个组件和 0 个 Token。');
+  if (result.library.source === 'convention' && !result.library.components) lines.push(en ? 'The convention-based library has no recognized components. The folder still participates in source rules.' : '按目录推断的组件库未识别到组件，该目录仍参与源码规则检查。');
   const reasons = en ? {scope:'outside rule scope',library:'library excluded','library-intrinsics':'native elements excluded inside library','no-components':'no library components available for mapping','no-files':'no scanned files'} : {scope:'超出规则适用范围', library:'跳过组件库文件','library-intrinsics':'组件库内仅跳过原生元素','no-components':'未识别到可用于映射的组件','no-files':'没有成功扫描的文件'};
   const label = (id: string) => en ? id : ruleDescription(id);
   const skips = [...result.rules.disabled.map(d => label(d.id) + ' · ' + d.reason),

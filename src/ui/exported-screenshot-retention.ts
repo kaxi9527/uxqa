@@ -5,6 +5,7 @@ import { dataDir } from './store.js';
 
 interface RegisteredScreenshot { path: string; root: string; dev: number; ino: number; size: number; mtimeMs: number }
 const registry = () => join(dataDir(), 'screenshot-runs');
+export {registry as screenshotRegistry};
 
 /** Register only actual screenshot files produced directly in this run's output directory. */
 export async function registerExportedScreenshots(output: string, paths: string[]): Promise<void> {
@@ -41,9 +42,9 @@ export async function registerHistoricalScreenshots(outputRoot: string): Promise
     if (!entry.isDirectory() || !/^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z-[a-f0-9]{8}$/.test(entry.name)) continue;
     const output = join(root, entry.name);
     for (const reportName of ['report.json', 'components.json']) {
-      const report = await readFile(join(output, reportName), 'utf8').then((text) => JSON.parse(text) as { endedAt?: string; artifacts?: unknown[]; observations?: Array<{ screenshot?: unknown }> }).catch(() => undefined);
+      const report = await readFile(join(output, reportName), 'utf8').then((text) => JSON.parse(text) as { screenshotRetention?:string; endedAt?: string; artifacts?: unknown[]; observations?: Array<{ screenshot?: unknown }> }).catch(() => undefined);
       const endedAt = report?.endedAt ? Date.parse(report.endedAt) : NaN;
-      if (!report || !Number.isFinite(endedAt)) continue;
+      if (!report || report.screenshotRetention==='user-export' || !Number.isFinite(endedAt)) continue;
       const paths = [...(Array.isArray(report.artifacts) ? report.artifacts : []), ...(Array.isArray(report.observations) ? report.observations.map((item) => item.screenshot) : [])]
         .filter((value): value is string => typeof value === 'string' && isAbsolute(value) && value.toLowerCase().endsWith('.png'));
       const unchanged: string[] = [];

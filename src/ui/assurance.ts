@@ -80,6 +80,7 @@ export async function addUsabilitySession(entry: ProjectEntry, round: Round, inp
   return saveRecord(entry,'sessions',{ id:randomUUID(), at:new Date().toISOString(), roundId:round.id, task, cohort, evidence, outcome, friction, seconds, reportedEase:ease });
 }
 async function documentText(entry: ProjectEntry, path: unknown) {
+  if(typeof path==='string'&&(/^(?:\/|[A-Za-z]:[\\/])/.test(path)||path.split(/[\\/]/).includes('..')))throw new ProjectAgentError(400,'此入口仅支持项目内相对路径。外部文档请拖入当前项目的检查依据，或使用 uxqa requirements --file。 / Drop the external document into this project or use the requirements CLI.');
   const target = await checkedPath(entry.root, path);
   if (target.directory || (await stat(target.path)).size > 4_000_000) throw new ProjectAgentError(400, '请选择小于 4 MB 的文本文件。 / Select a text file under 4 MB.');
   const bytes = await readFile(target.path);
@@ -90,9 +91,9 @@ async function documentText(entry: ProjectEntry, path: unknown) {
 }
 const signals: Record<string, RegExp> = {
   fidelity: /字号|设计稿|栅格|字重|间距|颜色|对齐|font|spacing|design frame|alignment|colour|color/i,
-  logic: /条件|规则|状态|生效|权限|角色|接口|阈值|必须|确认后|取消|边界|\b(?:if|when|must|role|api|boundary|limit|threshold)\b/i,
+  logic: /条件|规则|状态|生效|权限|角色|接口|阈值|必须|确认后|取消|边界|没有|禁止|不得|不允许|不能|\b(?:if|when|must|role|api|boundary|limit|threshold|cannot|forbidden)\b/i,
   interaction: /点击|焦点|弹层|滚动|手势|返回|拖拽|输入|click|focus|scroll|gesture|drag|navigate/i,
-  usability: /用户|便利|认知|用户反馈|求助|任务耗时|易用|user research|usability|confus|help|task completion/i,
+  usability: /便利|认知|用户反馈|求助|任务耗时|易用|用户研究|user research|usability|confus|help|task completion/i,
   accessibility: /无障碍|读屏|对比度|焦点|键盘|辅助技术|wcag|contrast|keyboard|screen reader|aria-/i,
   components: /组件|变体|令牌|token|component|story|props|variant/i,
   compatibility: /离线|重试|语言|国际化|窄屏|兼容|横屏|浏览器|offline|retry|locale|rtl|browser|viewport/i,

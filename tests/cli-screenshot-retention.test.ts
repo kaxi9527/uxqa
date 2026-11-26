@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readFile, readdir, rm, stat, symlink, utimes, writeFile } from 'node:fs/promises';
+import { realpath, mkdtemp, mkdir, readFile, readdir, rm, stat, symlink, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
 import { execFile } from 'node:child_process';
@@ -39,7 +39,7 @@ it('cleans registered CLI screenshots without deleting modified, unregistered, o
   }
 });
 
-it('registers screenshots produced by the real run and components commands', async () => {
+it('keeps custom run and component exports unless their screenshots are explicitly registered', async () => {
   const home = await mkdtemp(join(tmpdir(), 'uxqa-cli-integration-home-'));
   const workspace = await mkdtemp(join(tmpdir(), 'uxqa-cli-integration-'));
   await mkdir(resolve('.ai-output'), { recursive: true });
@@ -56,17 +56,19 @@ it('registers screenshots produced by the real run and components commands', asy
   const env = { ...process.env, UXQA_HOME: home, UXQA_OUTPUT_ROOT: defaultOutput };
   try {
     await exec(process.execPath, [resolve('node_modules/typescript/bin/tsc'), '--outDir', build], { env, timeout: 45_000 });
-    for (const command of ['run', 'components']) {
-      const output = join(workspace, `output-${command}`);
+    for (const {command,expire} of ['run','components'].flatMap(command=>[false,true].map(expire=>({command,expire})))) {
+      const output = join(workspace, `output-${command}-${expire}`);
       let stderr = '';
-      await exec(process.execPath, [cli, command, '--config', config, '--out', output, ...(command === 'components' ? ['--no-design-tokens'] : [])], { env, timeout: 45_000 }).catch((error: { code?: number; stderr?: string }) => { if (error.code !== 1) throw error; stderr = error.stderr ?? ''; });
+      await exec(process.execPath, [cli, command, '--config', config, '--out', output, ...(expire ? ['--expire-screenshots'] : []), ...(command === 'components' ? ['--no-design-tokens'] : [])], { env, timeout: 45_000 }).catch((error: { code?: number; stderr?: string }) => { if (error.code !== 1) throw error; stderr = error.stderr ?? ''; });
       const reportText = await readFile(join(output, command === 'run' ? 'report.json' : 'components.json'), 'utf8').catch(() => { throw new Error(`${command} produced no report: ${stderr.slice(0, 800)}`); });
       const report = JSON.parse(reportText);
       const screenshots: string[] = command === 'run' ? report.artifacts.filter((item: string) => item.endsWith('.png')) : report.observations.flatMap((item: { screenshot?: string }) => item.screenshot ? [item.screenshot] : []);
       expect(screenshots.length, `${command} should produce screenshots; coverage=${JSON.stringify(report.coverage ?? report.checks?.slice(0, 2))}`).toBeGreaterThan(0);
-      const records = await Promise.all((await readdir(join(home, 'screenshot-runs'))).map(async (file) => JSON.parse(await readFile(join(home, 'screenshot-runs', file), 'utf8')) as Array<{ path: string }>));
+      expect(report.screenshotRetention).toBe(expire?'managed-48h':'user-export');
+      const manifests=await readdir(join(home,'screenshot-runs')).catch((error:NodeJS.ErrnoException)=>{if(error.code==='ENOENT')return [];throw error;});
+      const records = await Promise.all(manifests.map(async (file) => JSON.parse(await readFile(join(home, 'screenshot-runs', file), 'utf8')) as Array<{ path: string }>));
       const recorded = records.flat().map((item) => item.path);
-      for (const screenshot of screenshots) expect(recorded.some((path) => basename(path) === basename(screenshot))).toBe(true);
+      for (const screenshot of screenshots) expect(recorded.includes(join(await realpath(output),basename(screenshot)))).toBe(expire);
     }
   } finally {
     await new Promise<void>((done) => server.close(() => done()));

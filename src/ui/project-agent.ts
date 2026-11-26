@@ -549,7 +549,7 @@ export function startReviewedJourney(entry: ProjectEntry, planId: unknown) {
       }
       browser = await chromium.launch();
       controller.signal.throwIfAborted();
-      const phases = await runBusinessJourney(browser, baseUrl, plan, { restrictToPreview: true,
+      const phases = await runBusinessJourney(browser, baseUrl, plan, { restrictToPreview: true, readySelector: entry.pages?.readySelector,
         ...(prepared.data.basis==='requirement-template' && entry.pages?.storageState ? {actorStates:{operator:entry.pages.storageState}} : {}) });
       controller.signal.throwIfAborted();
       const status = phases.some(p => p.status === 'fail') ? 'fail' : phases.some(p => p.status === 'blocked') ? 'blocked' : phases.some(p => p.status === 'not-verified') ? 'not-verified' : 'pass';

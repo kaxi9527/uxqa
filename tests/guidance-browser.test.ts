@@ -116,12 +116,12 @@ it('uses integrated quality modules and completes issue handling through the rea
     await capture('recheck-desktop');
 
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.getByRole('tab', { name: '检查', exact: true }).click();
+    await page.getByLabel('项目页面').selectOption('checks');
     await page.getByLabel('检测类别', { exact: true }).waitFor();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await capture('checks-mobile');
     expect(await page.locator('body').innerText()).not.toMatch(/Impeccable|Kowalski|Pro Max|完整参考库/);
-    await page.getByRole('tab', { name: '问题处理', exact: true }).click();
+    await page.getByLabel('项目页面').selectOption('issues');
     await page.getByRole('button', { name: '回到问题列表', exact: true }).click();
     await page.getByRole('button', { name: '专项修复方案', exact: true }).click();
     await page.getByRole('button', { name: /动效与连续操作/ }).click();

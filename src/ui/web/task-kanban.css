@@ -32,8 +32,11 @@
 .kb-advice p,.kb-guide p,.kb-detail-section p { margin:6px 0;white-space:pre-line; }
 .kb-guide summary { cursor:pointer;padding:5px 0; }
 .kb-last { white-space:pre-line;overflow-wrap:anywhere; }
-@media(max-width:700px){
+.kb-stage-picker { display: none; }
+@media(max-width:820px){
   .board-views { align-items:flex-start;margin-bottom:14px; }
-  .kb-lanes { grid-template-columns:repeat(6,minmax(202px,67vw)); }
+  .kb-stage-picker { display:grid;gap:4px;margin-bottom:8px;color:var(--muted);font-size:13px; }
+  .kb-lanes { grid-template-columns:minmax(0,1fr); }
+  .kb-lane:not(.kb-active) { display:none; }
   .kb-stack { min-height:285px; }
 }

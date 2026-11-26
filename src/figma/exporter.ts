@@ -1,34 +1,85 @@
 import type { FigmaConfig } from './types.js';
+import { contentFingerprint, disabledProperties, inventoryFingerprint } from './semantics.js';
+import { GRAPH_COLLECT } from './graph.js';
 
 /** Generated code only reads document nodes/variables. Page selection is the sole UI operation. */
-export function exportScripts(config: FigmaConfig, exportId: string): { index: string; collect: string } {
+export function exportScripts(config: FigmaConfig, exportId: string) {
   const prefix = `const UXQA_CONFIG = ${JSON.stringify(config)};\nconst UXQA_EXPORT_ID = ${JSON.stringify(exportId)};\n`;
-  const setup = String.raw`
-if (figma.fileKey && figma.fileKey !== UXQA_CONFIG.fileKey) throw Error('QA Master file scope mismatch');
+  const setup = 'const inventoryFingerprint='+inventoryFingerprint.toString()+';\nconst contentFingerprint='+contentFingerprint.toString()+';\nconst isDisabled='+disabledProperties.toString()+';\n'+String.raw`
+let observedFileKey;try{observedFileKey=figma.fileKey;}catch{}
+if (observedFileKey && observedFileKey !== UXQA_CONFIG.fileKey) throw Error('QA Master file scope mismatch');
 const page = await figma.getNodeByIdAsync(UXQA_CONFIG.pageId);
 if (!page || page.type !== 'PAGE') throw Error('QA Master page not found');
 await figma.setCurrentPageAsync(page);
-const meta = () => ({schemaVersion:1,exportId:UXQA_EXPORT_ID,fileKey:UXQA_CONFIG.fileKey,pageId:page.id,capturedAt:new Date().toISOString()});
+const meta = () => ({schemaVersion:1,exportId:UXQA_EXPORT_ID,fileKey:UXQA_CONFIG.fileKey,fileKeyObserved:!!observedFileKey,pageId:page.id,capturedAt:new Date().toISOString()});
+const seal=value=>({...value,contentFingerprint:contentFingerprint(value)});
+const componentIds=()=>page.findAllWithCriteria({types:['COMPONENT']}).map(n=>n.id).sort();
+const witness=ids=>({total:ids.length,fingerprint:inventoryFingerprint(ids)});
+const modeBindings=new Map();
+function modeFor(c,T){
+  const requested=T.modes?.[c.id]||T.mode||T.name;
+  const lower=s=>s.trim().toLowerCase();
+  const alias=s=>({'浅色':'light','亮色':'light','深色':'dark','暗色':'dark'}[lower(s)]||lower(s));
+  const direct=c.modes.filter(m=>lower(m.name)===lower(requested));
+  const matches=direct.length?direct:c.modes.filter(m=>alias(m.name)===alias(requested));
+  const selected=matches.length===1?matches[0]:c.modes.length===1?c.modes[0]:null;
+  if(!selected)throw Error('主题模式不匹配 / Theme mode mismatch: '+T.name+' → '+requested+'; '+(c.name||c.id)+' ['+c.id+'] available: '+c.modes.map(m=>m.name).join(', ')+'. Set theme.mode or theme.modes[collectionId].');
+  modeBindings.set(c.id+'|'+T.name,{collection:c.id,theme:T.name,mode:selected.name});
+  return selected;
+}
 const byteLength=s=>encodeURIComponent(s).replace(/%[0-9A-F]{2}/g,'x').length;
-const bounded = value => {const s=JSON.stringify(value);if(byteLength(s)<=38000)return value;
+const bounded = raw => {const value=seal(raw),s=JSON.stringify(value);if(byteLength(s)<=43000)return value;
   const counts=new Map(),tokens=s.match(/"(?:\\.|[^"\\])*"/g)||[];for(const token of tokens)counts.set(token,(counts.get(token)||0)+1);
   const dictionary=[],refs=new Map();for(const [token,count]of counts)if(token.length>7&&count>1){refs.set(token,dictionary.length);dictionary.push(JSON.parse(token));}
   const payload=s.replace(/"(?:\\.|[^"\\])*"/g,token=>refs.has(token)?'@'+refs.get(token):token);
   const packed={encoding:'uxqa-json-dictionary-v1',dictionary,payload};
-  if(byteLength(JSON.stringify(packed))>43000)throw Error('QA Master output exceeds 43000 bytes; reduce component IDs and retry (nothing was changed)');return packed;};
+  if(byteLength(JSON.stringify(packed))<=43000)return packed;
+  const shapes=[],shapeIds=new Map();
+  function row(v){if(Array.isArray(v))return [-1,...v.map(row)];if(v!==null&&typeof v==='object'){
+    const k=Object.keys(v),key=JSON.stringify(k);if(!shapeIds.has(key)){shapeIds.set(key,shapes.length);shapes.push(k);}
+    return [shapeIds.get(key),...k.map(key=>row(v[key]))];}return v;}
+  const compact={encoding:'qa-master-rows-v1',data:row(JSON.parse(s)),shapes};
+  if(byteLength(JSON.stringify(compact))>43000)throw Error('MCP return exceeds 43000 bytes; use the local capture plugin or fewer IDs. No evidence was truncated.');return compact;};
 `;
-  const index = prefix + setup + String.raw`
-const ids = page.findAllWithCriteria({types:['COMPONENT']}).map(n=>n.id).sort();
-async function tokenColor(id,theme,chain=[]){if(chain.includes(id)||chain.length>20)return null;const v=await figma.variables.getVariableByIdAsync(id);if(!v)return null;const c=await figma.variables.getVariableCollectionByIdAsync(v.variableCollectionId);if(!c)return null;const mode=c.modes.find(m=>m.name.toLowerCase()===theme.toLowerCase())||(c.modes.length===1?c.modes[0]:null);if(!mode)return null;const x=v.valuesByMode[mode.modeId];if(x?.type==='VARIABLE_ALIAS')return tokenColor(x.id,theme,[...chain,id]);return x&&typeof x.r==='number'?[x.r,x.g,x.b,x.a===undefined?1:x.a]:null;}
-const tokenObservations=[];for(const t of UXQA_CONFIG.tokenExpectations||[])tokenObservations.push({...t,actual:await tokenColor(t.id,t.theme)});
-return bounded({...meta(),kind:'index',pageName:page.name,componentIds:ids,themes:UXQA_CONFIG.themes.map(t=>t.name),forbiddenFonts:UXQA_CONFIG.forbiddenFonts||[],allowedColorPrefixes:UXQA_CONFIG.allowedColorPrefixes||[],tokenObservations});
+  const indexBody = String.raw`
+const roots=page.findAllWithCriteria({types:['COMPONENT']}),ids=roots.map(n=>n.id).sort(),refs=new Set(),variables=new Map(),collections=new Map();
+function paintRefs(n){for(const field of ['fills','strokes'])if(Array.isArray(n[field]))for(const p of n[field])if(p.visible!==false&&p.boundVariables?.color)refs.add(p.boundVariables.color.id);}
+function visit(n){if(n.visible===false)return;paintRefs(n);for(const c of n.children||[])visit(c);}
+for(const root of roots){visit(root);for(let a=root.parent;a&&a.type!=='PAGE';a=a.parent)paintRefs(a);}
+async function tokenColor(id,T,chain=[]){
+  if(chain.includes(id)||chain.length>20)return null;
+  if(!variables.has(id))variables.set(id,await figma.variables.getVariableByIdAsync(id));const v=variables.get(id);if(!v)return null;
+  if(!collections.has(v.variableCollectionId))collections.set(v.variableCollectionId,await figma.variables.getVariableCollectionByIdAsync(v.variableCollectionId));
+  const c=collections.get(v.variableCollectionId);if(!c)return null;const x=v.valuesByMode[modeFor(c,T).modeId];
+  if(x?.type==='VARIABLE_ALIAS')return tokenColor(x.id,T,[...chain,id]);return x&&typeof x.r==='number'?[x.r,x.g,x.b,x.a===undefined?1:x.a]:null;
+}
+const tokenObservations=[];
+for(const T of UXQA_CONFIG.themes){for(const id of refs)await tokenColor(id,T);if(T.backgroundVariableId)await tokenColor(T.backgroundVariableId,T);
+  for(const t of UXQA_CONFIG.tokenExpectations||[])if(t.theme===T.name)tokenObservations.push({...t,actual:await tokenColor(t.id,T)});}
+return emit({...meta(),kind:'index',pageName:page.name,componentIds:ids,inventory:witness(ids),modeBindings:[...modeBindings.values()],themes:UXQA_CONFIG.themes.map(t=>t.name),forbiddenFonts:UXQA_CONFIG.forbiddenFonts||[],allowedColorPrefixes:UXQA_CONFIG.allowedColorPrefixes||[],tokenObservations});
 `;
-  const collect = prefix + 'const UXQA_IDS = []; // Replace only this ID array with a bounded batch from index.json.\n' + setup + COLLECT;
-  return { index, collect };
+  const index=prefix+setup+'const emit=bounded;\n'+indexBody;
+  const collect=prefix+'const UXQA_IDS = []; // IDs from index.json\n'+setup+'const emit=bounded;\n'+COLLECT;
+  const graph=prefix+setup+'const emit=bounded;\n'+GRAPH_COLLECT;
+  const plugin=prefix+`figma.showUI(__html__,{width:430,height:240});let running=false;
+figma.ui.onmessage=async m=>{if(running || !['all','graph'].includes(m))return;running=true;try{
+${setup}
+const emit=seal;
+const collectGraph=async()=>{${GRAPH_COLLECT}};
+if(m==='graph'){figma.ui.postMessage({done:await collectGraph()});return;}
+const index=await (async()=>{${indexBody}})(),chunks=[];
+const collect=async UXQA_IDS=>{${COLLECT}};
+for(let i=0;i<index.componentIds.length;i+=128){
+  chunks.push(await collect(index.componentIds.slice(i,i+128)));
+  figma.ui.postMessage({progress:Math.min(i+128,index.componentIds.length)+' / '+index.componentIds.length});
+}
+figma.ui.postMessage({done:{kind:'qa-master-figma-capture',index,chunks,graph:await collectGraph()}});
+}catch(e){figma.ui.postMessage({error:String(e.message||e)});}finally{running=false;}};`;
+  return {index,collect,graph,plugin};
 }
 
 const COLLECT = String.raw`
-if (!UXQA_IDS.length || UXQA_IDS.length>30 || new Set(UXQA_IDS).size!==UXQA_IDS.length) throw Error('QA Master needs 1–30 unique component IDs');
+if (!UXQA_IDS.length || UXQA_IDS.length>128 || new Set(UXQA_IDS).size!==UXQA_IDS.length) throw Error('QA Master needs 1–128 unique component IDs');
 const variableCache=new Map(),collectionCache=new Map(),mainCache=new Map();
 const variable=async id=>{if(!variableCache.has(id))variableCache.set(id,await figma.variables.getVariableByIdAsync(id));return variableCache.get(id);};
 const collection=async id=>{if(!collectionCache.has(id))collectionCache.set(id,await figma.variables.getVariableCollectionByIdAsync(id));return collectionCache.get(id);};
@@ -38,7 +89,7 @@ async function resolveColor(id,T,unknown,chain=[]) {
   if(chain.includes(id)||chain.length>20){unknown.add('alias-cycle:'+id);return null;}
   const v=await variable(id);if(!v){unknown.add('missing-variable:'+id);return null;}
   const c=await collection(v.variableCollectionId);if(!c){unknown.add('missing-collection:'+v.variableCollectionId);return null;}
-  const mode=c.modes.find(m=>m.name.toLowerCase()===T.name.toLowerCase())||(c.modes.length===1?c.modes[0]:null);
+  const mode=modeFor(c,T);
   if(!mode){unknown.add('missing-theme:'+c.id+':'+T.name);return null;}
   const value=v.valuesByMode[mode.modeId];
   if(value&&value.type==='VARIABLE_ALIAS')return resolveColor(value.id,T,unknown,[...chain,id]);
@@ -47,7 +98,10 @@ async function resolveColor(id,T,unknown,chain=[]) {
 }
 async function paint(p,T,unknown) {
   if(p.type!=='SOLID'){unknown.add('unsupported-paint:'+p.type);return null;}
-  if(p.boundVariables&&p.boundVariables.color)return resolveColor(p.boundVariables.color.id,T,unknown);
+  if(p.boundVariables&&p.boundVariables.color){
+    const c=await resolveColor(p.boundVariables.color.id,T,unknown);
+    return c?[c[0],c[1],c[2],c[3]*(p.opacity===undefined?1:p.opacity)]:null;
+  }
   return [p.color.r,p.color.g,p.color.b,p.opacity===undefined?1:p.opacity];
 }
 function livePaints(n,field){return Array.isArray(n[field])?n[field].filter(p=>p.visible!==false):[];}
@@ -69,7 +123,7 @@ function clipped(n){const b=n.absoluteBoundingBox;if(!b)return false;
 function walk(n,out){if(n.visible===false)return;out.push(n);if('children'in n)for(const c of n.children)walk(c,out);}
 function disabledText(n,root){for(let a=n;a&&a!==root.parent;a=a.parent){
   const props=a.type==='INSTANCE'?a.componentProperties:(a.type==='COMPONENT'?a.variantProperties:null);
-  if(props&&Object.entries(props).some(([k,raw])=>{const v=raw&&typeof raw==='object'?raw.value:raw;return /disabled|禁用/i.test(k)?/^(true|disabled|禁用)$/i.test(String(v)):/^(state|状态)$/i.test(k)&&/^(disabled|禁用)$/i.test(String(v));}))return true;
+  if(props&&isDisabled(props))return true;
 }return false;}
 function fingerprint(s){let a=2166136261,b=5381;for(let i=0;i<s.length;i++){a=Math.imul(a^s.charCodeAt(i),16777619);b=Math.imul(b,33)^s.charCodeAt(i);}return (a>>>0).toString(16)+'-'+(b>>>0).toString(16)+':'+s.length;}
 const components=[];
@@ -79,7 +133,7 @@ for(const id of UXQA_IDS){
   if(!ancestor||ancestor.id!==page.id)throw Error('Component outside requested page: '+id);
   const set=root.parent&&root.parent.type==='COMPONENT_SET'?root.parent:null;
   const props=root.variantProperties||{},nodes=[];walk(root,nodes);
-  const disabled=Object.entries(props).some(([k,v])=>/disabled|禁用/i.test(k)?/true|disabled|禁用/i.test(v):/^(state|状态)$/i.test(k)&&/disabled|禁用/i.test(v));
+  const disabled=isDisabled(props);
   const icons=[],hitRegions=[],dependencies=new Map(),bindings=new Map(),fonts=new Set(),types={};let unboundPaints=0;
   for(const n of nodes){
     types[n.type]=(types[n.type]||0)+1;
@@ -118,7 +172,8 @@ for(const id of UXQA_IDS){
         const fontSize=typeof n.fontSize==='number'?n.fontSize:null;
         const f=typeof n.fontName==='symbol'?null:n.fontName;
         const bold=f?(typeof f.variationSettings?.wght==='number'?f.variationSettings.wght>=700:/bold|black|heavy/i.test(f.style)&&!/semi|demi/i.test(f.style)):null;
-        texts.push({id:n.id,text:n.characters,foreground,background:await background(n,T,unknown),fontSize,bold,clipped:clipped(n),disabled:disabledText(n,root)});
+        const inactive=disabledText(n,root);
+        texts.push({id:n.id,text:n.characters,foreground,background:inactive?null:await background(n,T,unknown),fontSize,bold,clipped:clipped(n),disabled:inactive});
       }
     }
     let boundary=null;
@@ -130,5 +185,5 @@ for(const id of UXQA_IDS){
   const skeleton=nodes.map(n=>[n.type,n.layoutMode||null,'children'in n?n.children.filter(x=>x.visible!==false).length:0]);
   components.push({id:root.id,name:root.name,setId:set?set.id:null,setName:set?set.name:root.name,properties:props,width:root.width,height:root.height,disabled,icons:[...new Set(icons)].sort(),hitRegions,themes,structure:{signature:fingerprint(JSON.stringify(skeleton)),nodes:nodes.length,types},dependencies:[...dependencies.values()],fonts:[...fonts].sort(),paintBindings:[...bindings.values()],unboundPaints});
 }
-return bounded({...meta(),kind:'components',components});
+return emit({...meta(),kind:'components',inventory:witness(componentIds()),components});
 `;

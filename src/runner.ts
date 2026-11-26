@@ -6,7 +6,9 @@ import { AxeBuilder } from '@axe-core/playwright';
 import { measureMotion, measureReflow, traverseKeyboard } from './a11y-checks.js';
 import { readGitState, UXQA_VERSION } from './evidence.js';
 import { matchesUrl } from './glob.js';
+import { summarizePages } from './report.js';
 import { executeStep } from './steps.js';
+import { checkPageAccess, PageAccessBlocked, waitForPageReadiness } from './page-access.js';
 import { INTERACTION_SCENARIOS } from './types.js';
 import { runBusinessJourney } from './business-journey.js';
 import type { CheckResult, DataNature, Finding, FlowConfig, HarnessConfig, RunEvidence, RunResult } from './types.js';
@@ -14,6 +16,7 @@ import type { CheckResult, DataNature, Finding, FlowConfig, HarnessConfig, RunEv
 export interface RunOptions {
   outDir: string;
   headed?: boolean;
+  onDiagnostic?: (message:string)=>void;
 }
 
 type NewCheck = Omit<CheckResult, 'id'>;
@@ -91,13 +94,17 @@ export async function runAudit(config: HarnessConfig, options: RunOptions): Prom
   let browser: Browser | undefined;
   const newContext = (viewport: { width: number; height: number }, extra: Parameters<Browser['newContext']>[0] = {}): Promise<BrowserContext> =>
     browser!.newContext({ viewport, ...(config.storageState ? { storageState: config.storageState } : {}), ...extra });
+  function waitForReadiness(page:Page, route:string){
+    const readiness = config.readiness?.[route];
+    return waitForPageReadiness(page,readiness?.selector,readiness?.timeoutMs);
+  }
 
   try {
     browser = await chromium.launch({ headless: !options.headed });
     evidence.browser = `chromium ${browser.version()}`;
     // A state-changing journey runs once across roles, independently of the visual viewport matrix.
     for (const [index, journey] of (config.journeys ?? []).entries()) {
-      const phases = await runBusinessJourney(browser, config.baseUrl, journey, { actorStates: config.actorStates });
+      const phases = await runBusinessJourney(browser, config.baseUrl, journey, { actorStates: config.actorStates, readiness: config.readiness });
       const file = join(options.outDir, `business-journey-${index + 1}.json`);
       await writeFile(file, JSON.stringify({ name: journey.name, requirement: journey.requirement, phases }, null, 2), { mode: 0o600 });
       artifacts.push(file);
@@ -141,14 +148,16 @@ export async function runAudit(config: HarnessConfig, options: RunOptions): Prom
         try {
           try {
             const response = await page.goto(absoluteUrl(config.baseUrl, route), { waitUntil: 'load' });
+            await checkPageAccess(page,absoluteUrl(config.baseUrl,route),response);
             if (response && response.status() >= 400) throw new Error(`Page returned HTTP ${response.status()}`);
+            await waitForReadiness(page,route);
             loaded = true;
           } catch (error) {
             const message = errorMessage(error);
-            const status = ENVIRONMENT_ERROR.test(message) ? 'blocked' : 'fail';
+            const status = error instanceof PageAccessBlocked || ENVIRONMENT_ERROR.test(message) ? 'blocked' : 'fail';
             findings.push({ id: `page-${label}`, severity: 'blocking', kind: 'page', message, ...where });
-            addCheck({ check: 'page-load', dimension: 'engineering', status, detail: status === 'blocked' ? `Environment unavailable: ${message}` : message, ...where });
-            const reason = 'Blocked: page did not load';
+            addCheck({ check: 'page-load', dimension: 'engineering', status, detail: error instanceof PageAccessBlocked ? message : status === 'blocked' ? `Environment unavailable: ${message}` : message, ...where });
+            const reason = error instanceof PageAccessBlocked ? message : 'Blocked: page did not load';
             if (!declared('axe', { dimension: 'accessibility', ...where })) addCheck({ check: 'axe', dimension: 'accessibility', status: 'blocked', detail: reason, ...where });
             if (!declared('keyboard-focus', { dimension: 'accessibility', ...where })) addCheck({ check: 'keyboard-focus', dimension: 'accessibility', status: 'blocked', detail: reason, ...where });
             for (const flow of routeFlows) addCheck({ check: flow.scenario ?? 'flow', dimension: 'behavior', status: 'blocked', detail: reason, flow: flow.name, ...(flow.requirement ? { requirement: flow.requirement } : {}), dataNature: flowDataNature(flow, config.evidence.dataNature), ...where });
@@ -245,13 +254,17 @@ export async function runAudit(config: HarnessConfig, options: RunOptions): Prom
                 // An outstanding request from the preceding page must not consume the next flow's one-shot fault.
                 if (flow.network?.length) await page.goto('about:blank');
                 await installNetworkRules(page, flow, injectedRequests, recovery);
-                await page.goto(absoluteUrl(config.baseUrl, route), { waitUntil: 'load' });
+                const targetUrl=absoluteUrl(config.baseUrl,route);
+                await checkPageAccess(page,targetUrl,await page.goto(targetUrl,{waitUntil:'load'}));
+                await waitForReadiness(page,route);
                 if (flow.offline) await context.setOffline(true);
                 for (const [index, step] of flow.steps.entries()) {
                   try {
-                    await executeStep(page, step, { requests: flowRequests, recovery });
+                    await executeStep(page, step, { requests: flowRequests, recovery, onDiagnostic:options.onDiagnostic });
                   } catch (error) {
                     failure = errorMessage(error);
+                    const remaining=flow.steps.length-index-1;
+                    if(remaining)failure+=' · 后续步骤未执行 / Subsequent steps not run: '+remaining;
                     failedStep = `${flow.name} step ${index + 1} (${step.action})`;
                     blocked = index < (flow.preparationSteps ?? 0) || (flow.scenario === 'failure-recovery' && !recovery.injected);
                     break;
@@ -260,7 +273,7 @@ export async function runAudit(config: HarnessConfig, options: RunOptions): Prom
               } catch (error) {
                 failure = errorMessage(error);
                 failedStep = `${flow.name} setup`;
-                blocked = !!flow.scenario;
+                blocked = error instanceof PageAccessBlocked || !!flow.scenario;
               } finally {
                 page.off('response', retryResponse);
                 if (flow.offline) await context.setOffline(false).catch(() => undefined);
@@ -274,7 +287,7 @@ export async function runAudit(config: HarnessConfig, options: RunOptions): Prom
               if (failure && !blocked) findings.push({ id: `flow-${label}-${safeName(flow.name)}`, severity: 'blocking', kind: 'flow', message: failure, ...where, step: failedStep, ...requirement, evidence: flowEvidence });
               addCheck({
                 check: flow.scenario ?? 'flow', dimension: 'behavior', status: blocked ? 'blocked' : failure ? 'fail' : 'pass', flow: flow.name, ...requirement, dataNature,
-                detail: `${flow.expected ? `${flow.expected} — ` : ''}${failure ? `failed at ${failedStep}: ${failure}` : `${flow.steps.length} step(s) passed`}${dataNature === 'mock' ? ' [simulated network/offline state; not real integration]' : ''}`,
+                detail: `${flow.expected ? `${flow.expected} — ` : ''}${failure ? `failed at ${failedStep}: ${failure}` : `${flow.steps.length} step(s) passed`}${flow.offline || flow.network?.length ? ' [network/offline simulation configured; not real integration]' : dataNature === 'mock' ? ' [mock test data; real API integration not verified]' : ''}`,
                 ...where, evidence: flowEvidence,
               });
             }
@@ -311,6 +324,8 @@ export async function runAudit(config: HarnessConfig, options: RunOptions): Prom
           const page = await context.newPage();
           const response = await page.goto(absoluteUrl(config.baseUrl, route), { waitUntil: 'load', timeout: 20_000 });
           if (!response?.ok()) { addCheck({ check: reflow.check, dimension: 'responsive', status: 'blocked', detail: 'Could not measure target page: HTTP ' + (response?.status() ?? 'unavailable'), ...where }); continue; }
+          await checkPageAccess(page,absoluteUrl(config.baseUrl,route),response);
+          await waitForReadiness(page,route);
           await page.waitForTimeout(150);
           const result = await measureReflow(page, config.options.reflowExceptions);
           const label = `${safeName(route)}-${reflow.check}`;
@@ -321,7 +336,7 @@ export async function runAudit(config: HarnessConfig, options: RunOptions): Prom
           addCheck({ check: reflow.check, dimension: 'responsive', status: result.overflow ? 'fail' : 'pass', detail: `${reflow.detail}: document ${result.scrollWidth}px vs viewport ${result.width}px${result.clippedText.length ? `; ${result.clippedText.length} possibly clipped text element(s)` : ''}`, ...where, evidence: shot });
         } catch (error) {
           const message = errorMessage(error);
-          addCheck({ check: reflow.check, dimension: 'responsive', status: ENVIRONMENT_ERROR.test(message) ? 'blocked' : 'fail', detail: message, ...where });
+          addCheck({ check: reflow.check, dimension: 'responsive', status: error instanceof PageAccessBlocked || ENVIRONMENT_ERROR.test(message) ? 'blocked' : 'fail', detail: message, ...where });
         } finally { await context.close(); }
       }
 
@@ -334,6 +349,8 @@ export async function runAudit(config: HarnessConfig, options: RunOptions): Prom
         const page = await context.newPage();
         const response = await page.goto(absoluteUrl(config.baseUrl, route), { waitUntil: 'load', timeout: 20_000 });
         if (!response?.ok()) { addCheck({ check: 'reduced-motion', dimension: 'accessibility', status: 'blocked', detail: 'Could not measure target page: HTTP ' + (response?.status() ?? 'unavailable'), ...motionWhere }); continue; }
+        await checkPageAccess(page,absoluteUrl(config.baseUrl,route),response);
+        await waitForReadiness(page,route);
         await page.waitForTimeout(500);
         const motion = await measureMotion(page);
         const moving = motion.persistent.length + motion.autoplayVideos;
@@ -341,7 +358,7 @@ export async function runAudit(config: HarnessConfig, options: RunOptions): Prom
         addCheck({ check: 'reduced-motion', dimension: 'accessibility', status: moving ? 'not-verified' : 'pass', detail: moving ? `${moving} persistent motion source(s) still running under reduced motion; needs human judgement` : 'No long or infinite animation running under prefers-reduced-motion: reduce', ...motionWhere });
       } catch (error) {
         const message = errorMessage(error);
-        addCheck({ check: 'reduced-motion', dimension: 'accessibility', status: ENVIRONMENT_ERROR.test(message) ? 'blocked' : 'fail', detail: message, ...motionWhere });
+        addCheck({ check: 'reduced-motion', dimension: 'accessibility', status: error instanceof PageAccessBlocked || ENVIRONMENT_ERROR.test(message) ? 'blocked' : 'fail', detail: message, ...motionWhere });
       } finally { await context.close(); }
     }
   } catch (error) {
@@ -389,7 +406,7 @@ export async function runAudit(config: HarnessConfig, options: RunOptions): Prom
 
   const coverage = {
     sourceDirectories: [],
-    pages: checks.filter(c => c.check === 'page-load').map(({route, viewport, status}) => ({route, viewport, status})),
+    pages: summarizePages(checks),
     skippedChecks: checks.filter(c => ['blocked','not-verified','not-applicable'].includes(c.status)).map(({check, route, viewport, status, detail}) => ({check, route, viewport, status, detail})),
   };
   return { configName: config.name, startedAt, endedAt: new Date().toISOString(), findings, artifacts, checks, evidence, coverage };

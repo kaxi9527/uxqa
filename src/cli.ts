@@ -4,7 +4,7 @@ import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import { parseArgs } from './cli-options.js';
 import { loadConfig } from './config.js';
-import { summarizeRun } from './report.js';
+import { summarizeRun, screenshotNotice, type ScreenshotPolicy } from './report.js';
 import { writeReports } from './report-writer.js';
 import { runAudit } from './runner.js';
 import { auditComponents } from './components/audit.js';
@@ -14,7 +14,7 @@ import type { HarnessConfig } from './types.js';
 import { discoverLibrary } from './library/discovery.js';
 import { prepareComponentPlan, syncComponentPlan } from './library/workflow.js';
 import { describeError, runSourceCommand, SOURCE_COMMANDS } from './check-cli.js';
-import { registerExportedScreenshots, registerHistoricalScreenshots } from './ui/exported-screenshot-retention.js';
+import { registerExportedScreenshots, registerHistoricalScreenshots, screenshotRegistry } from './ui/exported-screenshot-retention.js';
 import { cleanExpiredScreenshots } from './ui/screenshot-retention.js';
 
 async function readStdin(): Promise<string> {
@@ -26,6 +26,13 @@ async function readStdin(): Promise<string> {
 
 async function main(): Promise<void> {
   const argv = process.argv.slice(2);
+  if(argv[0]==='requirements'){
+    const usage='uxqa requirements --file <requirements.md|document.txt>\n输出带原文位置的候选条款 JSON。导入项目、人工绑定和运行验收任务请使用 uxqa ui 或桌面应用。 / Inspect a document without a model. Import and bind acceptance tasks in the console.';
+    if(argv.includes('--help')||argv.includes('-h')){console.log(usage);return;}
+    if(argv.length!==3||argv[1]!=='--file')throw Error(usage);
+    const {inspectRequirements}=await import('./requirement-drafts.js');
+    console.log(JSON.stringify(await inspectRequirements(resolve(argv[2])),null,2));return;
+  }
   if (argv[0] === 'figma') {
     const { runFigmaCommand } = await import('./figma/cli.js');
     process.exitCode = await runFigmaCommand(argv.slice(1));
@@ -49,18 +56,42 @@ async function main(): Promise<void> {
   }
   const args = parseArgs(argv);
   if (args.help) {
-    console.log('  uxqa figma prepare --config <figma.json> | figma check --input <capture-directory>');
-    console.log('Usage:\n  uxqa ui | check | inventory | find | hook | mcp   (source rules; see uxqa check --help)\n  uxqa browser [install]   (the screenshot browser; downloaded only after you agree)\n  uxqa run --url <url> [--config <file>] [--out <empty-dir>] [--headed]\n  uxqa components [--url <url> | --config <file>] [--source <directory>] [--library <directory>] [--selector <css>] [--no-design-tokens]\n  uxqa library --source <directory> [--library <directory>]\n  uxqa component-plan --source <directory> --definition <json> [--library <directory>]\n  uxqa component-sync --plan <component-plan.json> [--out <empty-dir>]');
+    if (argv[0]==='run') {
+      console.log('uxqa run (--url <page> | --config <scenario.json>) [--out <directory>] [--headed]\n'+
+        'Run checks against a reachable web page. Relative routes use baseUrl.\n'+
+        'Example config: {"baseUrl":"http://localhost:3000","routes":["/","/settings"],"viewports":[{"name":"desktop","width":1440,"height":900}]}\n'+
+        'For a PRD use uxqa requirements --file <document.md>. Use uxqa ui or Desktop to import, bind and run acceptance tasks, or capture a login session. Supply storageState in scenario JSON.\n'+
+        'Add flows for interactions, requirementChecks for source-backed checks, or journeys for cross-role comparisons. Explicit --out keeps screenshots unless --expire-screenshots is set.');return;
+    }
+    if (argv[0]==='components') {
+      console.log('uxqa components [--url <page> | --config <scenario.json>] [--source <directory>] [--library <directory>] [--selector <css>] [--out <directory>] [--headed] [--no-design-tokens]\n'+
+        'Use a page, source files, or both. --library selects a catalog under --source. For cross-page observations configure multiple routes. With --out, use --expire-screenshots only to register screenshots for cleanup.');return;
+    }
+    if (argv[0]==='library') {
+      console.log('uxqa library --source <project-directory> [--library <directory>] [--out <directory>]\n'+
+        'Discover component catalogs in the project and report their sources. Example: uxqa library --source .');return;
+    }
+    console.log('Usage:\n  uxqa requirements --file <document.md>   (inspect source clauses)\n  uxqa ui   (import documents, bind acceptance tasks, capture login state; also available in Desktop)\n  uxqa figma prepare | ingest | check | graph\n  uxqa check | inventory | find | hook | mcp   (source rules; see uxqa check --help)\n  uxqa browser [install]   (the screenshot browser; downloaded only after you agree)\n  uxqa run --url <url> [--config <file>] [--out <empty-dir>] [--headed]\n  uxqa components [--url <url> | --config <file>] [--source <directory>] [--library <directory>] [--selector <css>] [--no-design-tokens]\n  uxqa library --source <directory> [--library <directory>]\n  uxqa component-plan --source <directory> --definition <json> [--library <directory>]\n  uxqa component-sync --plan <component-plan.json> [--out <empty-dir>]');
     return;
   }
   const runId = `${new Date().toISOString().replace(/[:.]/g,'-')}-${randomUUID().slice(0,8)}`;
   const outDir = args.out ? resolve(args.out) : resolve(process.env.UXQA_OUTPUT_ROOT ?? 'artifacts',runId);
+  const policy:ScreenshotPolicy=args.out&&!args.expireScreenshots?'user-export':'managed-48h';
+  async function finishScreenshots(paths:string[]){
+    if(!paths.length)return;
+    if(policy==='managed-48h'){
+      try{await registerExportedScreenshots(outDir,paths);}
+      catch(error){console.error('Screenshot registration failed: '+(error instanceof Error?error.message:String(error)));return;}
+      console.log(screenshotNotice(policy)+' '+screenshotRegistry()+' · Keep exports: use --out <directory> without --expire-screenshots.');
+    }else console.log(screenshotNotice(policy)+' '+outDir);
+  }
   if (args.command === 'run' || args.command === 'components') {
     try { await registerHistoricalScreenshots(resolve(process.env.UXQA_OUTPUT_ROOT ?? 'artifacts')); await cleanExpiredScreenshots(); }
     catch (error) { console.error(`Screenshot cleanup failed; it will be retried: ${error instanceof Error ? error.message : String(error)}`); }
   }
   let config: HarnessConfig | undefined;
   if (args.url || args.config) {
+    if(args.config && /\.(?:md|markdown|txt)$/i.test(args.config))throw Error('需求文档请使用 uxqa requirements --file <document.md>。在 uxqa ui 或桌面端导入文档并绑定验收任务。 / --config expects scenario JSON.');
     let raw: unknown = args.config ? JSON.parse(await readFile(resolve(args.config),'utf8')) : {baseUrl:args.url};
     if (args.url && args.config && raw && typeof raw === 'object' && !Array.isArray(raw)) raw = {...raw,baseUrl:args.url};
     config = loadConfig(raw);
@@ -93,18 +124,16 @@ async function main(): Promise<void> {
   }
   if (args.command === 'components') {
     const result = await auditComponents(config,{outDir,headed:args.headed,sourceDir:args.source,selector:args.selector,designTokens:args.designTokens,libraryDir:args.library});
-    try { await registerExportedScreenshots(outDir, result.observations.flatMap((item) => item.screenshot ? [item.screenshot] : [])); }
-    catch (error) { console.error(`Could not register screenshots for cleanup: ${error instanceof Error ? error.message : String(error)}`); }
-    const reports = await writeComponentReports(result,outDir);
+    await finishScreenshots(result.observations.flatMap(item=>item.screenshot?[item.screenshot]:[]));
+    const reports = await writeComponentReports(result,outDir,policy);
     console.log(`Component audit ${result.status}: ${result.candidates.length} cross-page candidates, ${result.source?.duplicates.length ?? 0} source clone pairs`);
     console.log(`HTML: ${reports.htmlPath}\nJSON: ${reports.jsonPath}\nMarkdown: ${reports.markdownPath}`);
     if (result.status==='partial') process.exitCode = 1;
     return;
   }
-  const result = await runAudit(config!, { outDir, headed: args.headed });
-  try { await registerExportedScreenshots(outDir, result.artifacts.filter((path) => path.toLowerCase().endsWith('.png'))); }
-  catch (error) { console.error(`Could not register screenshots for cleanup: ${error instanceof Error ? error.message : String(error)}`); }
-  const reports = await writeReports(result, outDir);
+  const result = await runAudit(config!, { outDir, headed: args.headed,onDiagnostic:message=>console.error(message) });
+  await finishScreenshots(result.artifacts.filter(path=>path.toLowerCase().endsWith('.png')));
+  const reports = await writeReports(result, outDir,policy);
   const summary = summarizeRun(result);
   console.log(`QA Master ${summary.status}: ${summary.blocking} blocking, ${summary.informational} informational`);
   console.log(`Verdict: ${summary.verdict} (pass ${summary.checks.pass}, fail ${summary.checks.fail}, blocked ${summary.checks.blocked}, not verified ${summary.checks['not-verified']}, not applicable ${summary.checks['not-applicable']})`);

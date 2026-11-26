@@ -4,7 +4,7 @@ import ts from 'typescript';
 import { parseSource, toPosix } from '../inventory/read.js';
 import { cssHints, htmlHints, jsxHints, wideWidth, type HintCheck } from './hints.js';
 import { scanComponentFile } from './templates/scan.js';
-import { ARBITRARY, COLOR_IN_TEXT, COLOR_VALUE, SIZE_VALUE, STYLE_COLOR_KEYS, STYLE_SIZE_KEYS, meaningful, stylePrefix, toPx, trimSnippet } from './values.js';
+import { arbitraryUtilities, hasWidthConstraint, COLOR_IN_TEXT, COLOR_VALUE, SIZE_VALUE, STYLE_COLOR_KEYS, STYLE_SIZE_KEYS, meaningful, stylePrefix, toPx, trimSnippet } from './values.js';
 
 export interface Position { file: string; line: number; column: number; snippet: string }
 
@@ -235,12 +235,12 @@ function scanScript(file: string, rel: string, text: string): Observation[] {
     const element = value.includes('[') ? enclosingElement(node) : undefined;
     const tag = element?.tag;
     const owner = element?.text ? { text: element.text } : {};
-    for (const match of value.matchAll(ARBITRARY)) {
+    for (const {match,variant} of arbitraryUtilities(value)) {
       const [, , prefix, raw] = match;
       const position = at(node, offset + (match.index ?? 0));
       if (COLOR_VALUE.test(raw)) observations.push({ kind: 'color', value: raw, context: 'class', token: match[0], classes: siblings, ...(tag ? { tag } : {}), ...owner, ...position });
       const size = raw.match(SIZE_VALUE);
-      if (size && wideWidth(prefix, toPx(Math.abs(Number(size[1])), size[2])) && tag !== 'table' && !siblings.some((name) => /^overflow-(x-)?(auto|scroll)$/.test(name)) && !insideScroller(node)) observations.push({ kind: 'hint', check: 'wide-fixed-width', detail: raw, classes: siblings, ...(tag ? { tag } : {}), ...owner, ...position });
+      if (size && wideWidth(prefix, toPx(Math.abs(Number(size[1])), size[2])) && !(prefix==='w' && hasWidthConstraint(siblings,variant)) && tag !== 'table' && !siblings.some((name) => /^overflow-(x-)?(auto|scroll)$/.test(name)) && !insideScroller(node)) observations.push({ kind: 'hint', check: 'wide-fixed-width', detail: raw, classes: siblings, ...(tag ? { tag } : {}), ...owner, ...position });
       if (size && Number(size[1]) !== 0) observations.push({ kind: 'size', raw: match[0].replace(/^(?:[a-z0-9-]+:)*/, ''), px: toPx(Math.abs(Number(size[1])), size[2]), prefix, context: 'class', token: match[0], classes: siblings, ...(tag ? { tag } : {}), ...owner, ...position });
     }
   };

@@ -428,7 +428,10 @@ function renderGlobal(workspace) {
   fill(workspace,
     h('header', { class: 'topbar' }, h('div', { class: 'topbar-row' }, h('div', { class: 'title grow' }, h('h1', { text: state.settingsFromChat ? accessText('模型设置', 'Model settings') : accessText('设置', 'Settings') }), h('span', { text: accessText('这里的设置所有项目通用', 'Settings apply to all projects') })),
       state.settingsFromChat ? antButton(accessText('返回修复对话', 'Back to repair chat'), () => { state.global = false; renderRail(); openProjectAgent(); }) : null)),
-    h('section', { class: 'content' }, h('div', { class: 'page settings-page' }, state.settingsFromChat ? ai : [access, ai, agent, browser, data])));
+    h('section', { class: 'content' }, h('div', { class: 'page settings-page' }, state.settingsFromChat ? ai : [access, ai, agent, browser, data,
+      h('div',{class:'panel'},h('h2',{text:accessText('版本与更新','Version and updates')}),
+        h('p',{text:accessText('当前运行版本','Running version')+' '+(accessRuntimeVersion||'—')}),
+        h('a',{class:'btn',href:'https://github.com/kaxi9527/uxqa/releases',target:'_blank',rel:'noopener noreferrer'},accessText('查看下载版本','View downloads')))])));
   renderAiPanel(ai);
   if (state.settingsFromChat) return;
   renderAccessPanel(access);
@@ -490,13 +493,18 @@ function renderWorkspace() {
       chooseTab(TABS[nextIndex][0]);
     },
   }, accessText(label, english))));
+  const projectPage = h('label', { class: 'project-page-picker' }, accessText('项目页面','Project page'),
+    h('select', { class:'input', id:'project-page-picker', onchange:event=>{
+      chooseTab(event.target.value);
+      document.getElementById('project-page-picker')?.focus();
+    }}, TABS.map(([id,zh,en])=>h('option',{value:id,selected:state.tab===id,text:accessText(zh,en)}))));
   const topbar = h('header', { class: 'topbar' },
     h('div', { class: 'topbar-row' },
       h('div', { class: 'title grow' }, h('h1', { class: 'ellipsis', text: entry.name }), h('span', { class: 'ellipsis', title: entry.root, text: entry.root })),
       chip,
       h('button', { class: 'btn quiet', type: 'button', onclick: () => openProjectAgent(state.tab === 'issues' ? freshViolations().find((item) => item.fingerprint === state.selected) : null) }, icon('wand'), accessText('让 AI 修', 'Ask AI to repair')),
       h('span', { id: 'runner-slot' }, runner())),
-    nav,
+    nav, projectPage,
     state.error ? h('div', { class: 'notice error row', role: 'alert' }, h('span', { class: 'grow', text: state.error }), h('button', { class: 'icon-btn', type: 'button', 'aria-label': accessText('关闭提示', 'Dismiss message'), onclick: () => { state.error = ''; renderWorkspace(); } }, icon('close'))) : null);
   const body = h('section', { class: state.tab === 'issues' ? '' : 'content', role: 'tabpanel', 'aria-labelledby': `tab-${state.tab}` });
   body.style.minHeight = '0';
@@ -981,6 +989,8 @@ function detailPane(violation, filtered, numbered, selectIssue) {
           h('span', { class: 'where mono ellipsis', title: violation.file }, icon('file'), violation.line ? `${violation.file}:${violation.line}` : violation.file))),
       h('div', { class: 'detail-actions' },
         antButton(accessText('讨论并修复', 'Discuss and repair'), () => openProjectAgent(violation), { id: 'discuss-finding', type: 'primary' }),
+        h('details',{class:'finding-more'},h('summary',{class:'btn'},accessText('更多操作','More actions')),
+        h('div',{class:'finding-more-options'},
         antButton(accessText('加入任务看板','Add to task board'),async()=>{
           const projectId=state.current;
           if(await newKanbanTask(projectId,violation,state.round.id) && state.current===projectId){
@@ -989,7 +999,7 @@ function detailPane(violation, filtered, numbered, selectIssue) {
         }),
         antButton(accessText('关联任务修复','Repair with a task'),()=>taskDesk(state.current,null,null,violation.fingerprint,state.round.id)),
         antButton(accessText('体验反馈','Experience feedback'),()=>quickTaskFeedback(state.current,violation.fingerprint,state.round.id,violation.quality?.suite||'usability')),
-        h('button', { class: 'btn small', type: 'button', onclick: () => copy(findingPrompt(violation), accessText('这一条的修复提示', 'repair prompt')) }, icon('copy'), accessText('复制提示词', 'Copy prompt')))),
+        h('button', { class: 'btn small', type: 'button', onclick: () => copy(findingPrompt(violation), accessText('这一条的修复提示', 'repair prompt')) }, icon('copy'), accessText('复制提示词', 'Copy prompt')))))),
     violation.origin === 'manual' ? h('div', { class: 'notice', text: accessText('这条问题来自项目级人工观察。请按记录的操作重现；尚未关联自动截图证据。', 'This is a manual project observation. Reproduce the recorded steps; no automatic screenshot evidence is attached.') }) : stage(number, capture),
     accessText(false, !violation.english && violation.origin !== 'manual') ? h('div', { class: 'notice', text: 'This saved finding is shown in its original language. Run a new check for the latest available English descriptions.' }) : null,
     issueWorkflowDetails(violation),
@@ -1383,7 +1393,8 @@ function renderSettings(body) {
   const loginBox = h('div', { role: 'status' });
   const routes = h('textarea', { id: 'routes', class: 'input short mono' });
   routes.value = pages.routes.join('\n');
-  const values = () => ({ baseUrl: document.getElementById('base-url').value, routes: routes.value, discover: document.getElementById('discover').checked, storageState: document.getElementById('storage').value });
+  const readiness = h('input',{id:'preview-ready',class:'input',value:pages.readySelector||'',placeholder:'main [data-loaded]',maxlength:500});
+  const values = () => ({ baseUrl: document.getElementById('base-url').value, routes: routes.value, discover: document.getElementById('discover').checked, storageState: document.getElementById('storage').value, readySelector:readiness.value });
   const form = h('form', { class: 'panel', onsubmit: async (event) => {
     event.preventDefault();
     try {
@@ -1394,6 +1405,8 @@ function renderSettings(body) {
     } catch (error) { fill(message, h('div', { class: 'notice error', text: error.message })); }
   } },
     h('h2', { text: accessText('页面地址', 'Page URLs') }),
+    h('div',{class:'field'},h('label',{for:'preview-ready',text:accessText('页面就绪标识（可选）','Page readiness selector (optional)')}),readiness,
+      h('span',{class:'hint',text:accessText('填写所有检测页面都支持的 CSS 选择器。元素可见后才采集或运行。','Use a CSS selector shared by the checked pages. Capture and checks wait for the element to appear.')})),
     h('p', { class: 'muted', text: accessText('填写后，每一轮检测会打开这些页面，把问题在截图上圈出来。需要先在本机把项目跑起来（例如 npm run dev）。', 'Checks open these pages and mark findings on screenshots. Start your project locally first (for example, npm run dev).') }),
     h('div', { class: 'field' }, h('label', { for: 'base-url', text: accessText('预览地址', 'Preview URL') }),
       h('div', { class: 'row' }, h('input', { id: 'base-url', class: 'input grow', type: 'text', inputmode: 'url', autocomplete: 'off', placeholder: 'localhost:5173', value: pages.baseUrl }),
@@ -1690,6 +1703,7 @@ async function removeCurrent() {
   if (wanted.get('settings')) {
     if (start) await selectProject(start.id);
     openGlobal();
+    document.documentElement.dataset.qaReady = 'true';
     return;
   }
   if (start) {
@@ -1704,4 +1718,5 @@ async function removeCurrent() {
   else if (panel === 'notes' && state.round) openRoundNotes();
   else if (panel === 'reuse' && state.round && state.round.capture && state.round.capture.reuse && state.round.capture.reuse.length) openReuse();
   else if (panel === 'changes' && state.round && state.round.capture && state.round.capture.changes && state.round.capture.changes.length) openChanges();
+  document.documentElement.dataset.qaReady = 'true';
 })();

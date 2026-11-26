@@ -607,7 +607,11 @@ export async function readInventory(source: string, declared?: string | { root?:
   }
 
   const tokens = await readTokens(productRoot, located.cssFiles, located.root);
-  const libraryFolders = libraries.flatMap((library) => (library.root && !relative(productRoot, library.root).startsWith('..') ? [toPosix(relative(productRoot, library.root))] : []));
+  const libraryFolders = libraries.flatMap((library) => {
+    if (!library.root || relative(productRoot, library.root).startsWith('..')) return [];
+    if (located.source === 'convention' && library.kind === 'auto' && library.components === 0) return [];
+    return [toPosix(relative(productRoot, library.root))];
+  });
   return {
     productRoot,
     ...(located.root ? { libraryRoot: located.root, library: toPosix(relative(productRoot, located.root)) } : {}),

@@ -1,7 +1,7 @@
 import ts from 'typescript';
 import type { Observation } from '../scan.js';
 import { wideWidth } from '../hints.js';
-import { ARBITRARY, camelCase, COLOR_IN_TEXT, COLOR_VALUE, meaningful, SIZE_VALUE, STYLE_COLOR_KEYS, STYLE_SIZE_KEYS, stylePrefix, toPx, trimSnippet } from '../values.js';
+import { arbitraryUtilities, hasWidthConstraint, camelCase, COLOR_IN_TEXT, COLOR_VALUE, meaningful, SIZE_VALUE, STYLE_COLOR_KEYS, STYLE_SIZE_KEYS, stylePrefix, toPx, trimSnippet } from '../values.js';
 import { expressionsOf, viewOf, type ElementView } from './element.js';
 import { templateHints } from './hints.js';
 import { componentBlocks, componentNameFromFile, markupOf, maskOutside, parseComponentFile, type Framework, type TemplateAttribute, type TemplateChild, type TemplateElement } from './parse.js';
@@ -128,12 +128,12 @@ export function scanComponentFile(rel: string, text: string, framework: Framewor
     const tag = view.role === 'intrinsic' ? view.tag : undefined;
     const owner = view.text && meaningful(view.text) ? { text: view.text } : {};
     for (const { token, offset } of tokens) {
-      for (const match of token.matchAll(ARBITRARY)) {
+      for (const {match,variant} of arbitraryUtilities(token)) {
         const [, , prefix, raw] = match;
         const position = at(offset + (match.index ?? 0));
         if (COLOR_VALUE.test(raw)) observations.push({ kind: 'color', value: raw, context: 'class', token: match[0], classes: siblings, ...(tag ? { tag } : {}), ...owner, ...position });
         const size = raw.match(SIZE_VALUE);
-        if (size && wideWidth(prefix, toPx(Math.abs(Number(size[1])), size[2])) && tag !== 'table' && !siblings.some((entry) => /^overflow-(x-)?(auto|scroll)$/.test(entry)) && !insideScroller()) observations.push({ kind: 'hint', check: 'wide-fixed-width', detail: raw, classes: siblings, ...(tag ? { tag } : {}), ...owner, ...position });
+        if (size && wideWidth(prefix, toPx(Math.abs(Number(size[1])), size[2])) && !(prefix==='w' && hasWidthConstraint(siblings,variant)) && tag !== 'table' && !siblings.some((entry) => /^overflow-(x-)?(auto|scroll)$/.test(entry)) && !insideScroller()) observations.push({ kind: 'hint', check: 'wide-fixed-width', detail: raw, classes: siblings, ...(tag ? { tag } : {}), ...owner, ...position });
         if (size && Number(size[1]) !== 0) observations.push({ kind: 'size', raw: match[0].replace(/^(?:[a-z0-9-]+:)*/, ''), px: toPx(Math.abs(Number(size[1])), size[2]), prefix, context: 'class', token: match[0], classes: siblings, ...(tag ? { tag } : {}), ...owner, ...position });
       }
     }

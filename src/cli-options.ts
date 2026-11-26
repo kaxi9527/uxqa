@@ -11,6 +11,7 @@ export interface CliOptions {
   headed: boolean;
   help: boolean;
   designTokens: boolean;
+  expireScreenshots?: boolean;
 }
 
 export function parseArgs(args: string[]): CliOptions {
@@ -25,6 +26,7 @@ export function parseArgs(args: string[]): CliOptions {
     const flag = args[index];
     if (flag === '--help' || flag === '-h') { options.help = true; continue; }
     if (flag === '--headed') { options.headed = true; continue; }
+    if (flag === '--expire-screenshots' && (options.command==='run'||options.command==='components')) { options.expireScreenshots = true; continue; }
     if (flag === '--no-design-tokens') { options.designTokens = false; continue; }
     const name = names.get(flag);
     if (!name) throw new Error(`Unknown flag: ${flag}`);

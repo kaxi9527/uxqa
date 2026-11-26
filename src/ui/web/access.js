@@ -2,6 +2,7 @@
 
 let accessSettings = { locale: null, onboardingDone: false, checks: [] };
 let accessDataLocation = '';
+let accessRuntimeVersion = '';
 const accessText = (zh, en) => accessSettings.locale === 'en' ? en : zh;
 function applyAccessLocale() {
   document.title=accessText('QA大师','QA Master');
@@ -118,6 +119,7 @@ function renderAccessPanel(panel) {
 async function initializeAccess() {
   accessSettings = await api('/access');
   accessDataLocation = accessSettings.dataLocation;
+  accessRuntimeVersion = accessSettings.version;
   applyAccessLocale();
   if (!accessSettings.onboardingDone || !accessSettings.locale) await openAccessOnboarding({ required: true });
   if (accessSettings.onboardingDone && accessSettings.checks.some((item) => item.result === 'accessible')) {
