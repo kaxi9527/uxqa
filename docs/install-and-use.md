@@ -10,7 +10,7 @@
 
 QA大师 通过 GitHub 提供下载，直接解压安装，不需要应用商店。下载包自带运行环境和模型模块，无需另外安装 Node.js，也不需要注册 QA大师 账号。AI 功能可以稍后配置。
 
-本说明对应 **v0.8.1**，较早版本的功能可能不同。以[下载页](https://github.com/kaxi9527/uxqa/releases)实际列出的版本为准，展开页面下方的 **Assets**，选择下面对应的文件；`Source code (zip)` / `Source code (tar.gz)` 是开发源码，不是可直接运行的应用。
+本说明对应 **v0.8.2**，较早版本的功能可能不同。以[下载页](https://github.com/kaxi9527/uxqa/releases)实际列出的版本为准，展开页面下方的 **Assets**，选择下面对应的文件；`Source code (zip)` / `Source code (tar.gz)` 是开发源码，不是可直接运行的应用。
 
 本地资料检查开箱可用。模型需在用户电脑或局域网中单独提供。在线仓库读取需要本机已安装 Git。断网前请准备浏览器运行时、本地模型和设计导出稿。[导入检查依据](product-guide.zh-CN.md#导入检查依据)
 
@@ -18,11 +18,11 @@ QA大师 通过 GitHub 提供下载，直接解压安装，不需要应用商店
 
 | 你的电脑 | 下载文件 |
 | --- | --- |
-| Mac，Apple 芯片（M 系列），macOS 14 或更高 | QA-Master-0.8.1-macOS-arm64.zip |
-| Mac，Intel 芯片，macOS 14 或更高 | QA-Master-0.8.1-macOS-x64.zip |
-| Windows 11 或更高，Intel / AMD x64 | qa-master-0.8.1-win-x64.zip |
-| Linux，x86_64 / amd64，glibc | qa-master-0.8.1-linux-x64.tar.gz |
-| Linux，aarch64 / arm64，glibc | qa-master-0.8.1-linux-arm64.tar.gz |
+| Mac，Apple 芯片（M 系列），macOS 14 或更高 | QA-Master-0.8.2-macOS-arm64.zip |
+| Mac，Intel 芯片，macOS 14 或更高 | QA-Master-0.8.2-macOS-x64.zip |
+| Windows 11 或更高，Intel / AMD x64 | qa-master-0.8.2-win-x64.zip |
+| Linux，x86_64 / amd64，glibc | qa-master-0.8.2-linux-x64.tar.gz |
+| Linux，aarch64 / arm64，glibc | qa-master-0.8.2-linux-arm64.tar.gz |
 
 Mac 在“ → 关于本机”查看芯片；Windows 在“设置 → 系统 → 系统信息”查看系统类型；Linux 运行 `uname -m`。Linux 建议使用 Ubuntu 22.04 / 24.04 桌面环境。此版本没有 Windows ARM64 原生包，不支持 Alpine / musl。
 
@@ -30,14 +30,14 @@ Mac 在“ → 关于本机”查看芯片；Windows 在“设置 → 系统 
 
 ```sh
 # macOS；Intel 包请换成对应文件名
-shasum -a 256 QA-Master-0.8.1-macOS-arm64.zip
+shasum -a 256 QA-Master-0.8.2-macOS-arm64.zip
 # Linux；ARM64 包请换成对应文件名
-sha256sum qa-master-0.8.1-linux-x64.tar.gz
+sha256sum qa-master-0.8.2-linux-x64.tar.gz
 ```
 
 ```powershell
 # Windows PowerShell
-Get-FileHash .\qa-master-0.8.1-win-x64.zip -Algorithm SHA256
+Get-FileHash .\qa-master-0.8.2-win-x64.zip -Algorithm SHA256
 ```
 
 ## 2. 安装并打开
@@ -56,7 +56,7 @@ Get-FileHash .\qa-master-0.8.1-win-x64.zip -Algorithm SHA256
 ### Windows
 
 1. 右键 ZIP → **全部解压缩**，放到自己可写的目录，例如“文档”下的 `QA大师` 文件夹。不要在 ZIP 预览窗口里直接运行。
-2. 打开解压后的 `qa-master-0.8.1-win-x64` 文件夹，双击 **`Open uxqa console.cmd`**。
+2. 打开解压后的 `qa-master-0.8.2-win-x64` 文件夹，双击 **`Open uxqa console.cmd`**。
 3. 会出现终端窗口，并在默认浏览器打开 QA大师 本机界面。使用期间保留该终端窗口；它是 QA大师 的本地服务。
 4. 若出现“Windows 已保护你的电脑”，核对来源与摘要后，在提示中选择 **更多信息 → 仍要运行**（系统提供该选项时）。企业策略、S 模式或 Smart App Control 可能不提供单次放行入口；此时由管理员处理，不要关闭整机防护。[Microsoft 说明](https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/smartscreen-reputation)
 
@@ -70,15 +70,15 @@ Get-FileHash .\qa-master-0.8.1-win-x64.zip -Algorithm SHA256
 
 ```sh
 # x64
-tar -xzf qa-master-0.8.1-linux-x64.tar.gz
-cd qa-master-0.8.1-linux-x64
+tar -xzf qa-master-0.8.2-linux-x64.tar.gz
+cd qa-master-0.8.2-linux-x64
 ./open-uxqa-console.sh
 ```
 
 ```sh
 # ARM64
-tar -xzf qa-master-0.8.1-linux-arm64.tar.gz
-cd qa-master-0.8.1-linux-arm64
+tar -xzf qa-master-0.8.2-linux-arm64.tar.gz
+cd qa-master-0.8.2-linux-arm64
 ./open-uxqa-console.sh
 ```
 
