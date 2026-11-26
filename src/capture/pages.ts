@@ -10,6 +10,7 @@ export interface PageTarget {
   baseUrl: string;
   routes: string[];
   storageState?: string;
+  readySelector?: string;
   /** Follow same-origin links from the first page to find more pages (bounded). */
   discover?: boolean;
   viewport?: { width: number; height: number };
@@ -207,6 +208,7 @@ export async function capturePages(violations: Violation[], target: PageTarget, 
           continue;
         }
         if (status >= 400) throw new Error(`页面返回 ${status}`);
+        await waitForPageReadiness(page,target.readySelector);
         const empty = await inPage<boolean>(page, "() => !document.body || (document.body.innerText.trim().length === 0 && !document.querySelector('img,svg,canvas,video'))").catch(() => false);
         if (empty) {
           pages.push({ route, url, status: 'blank', error: '页面是空白的，可能还在加载、出错了，或者需要登录', problems: 0 });
@@ -294,3 +296,4 @@ export async function capturePages(violations: Violation[], target: PageTarget, 
   }
   return { baseUrl: target.baseUrl, viewport: viewportName, pages, captures, cancelled, durationMs: Date.now() - started };
 }
+import { waitForPageReadiness } from '../page-access.js';

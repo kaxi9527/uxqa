@@ -68,9 +68,15 @@ function renderTaskKanban(panel){
   let board,signature='',dragged,timer,sequence=0;
   panel.classList.add('kb');
   const header=h('div',{class:'kb-head'}),lanes=h('div',{class:'kb-lanes',role:'region',tabindex:0,'aria-label':t('任务状态列','Task status lanes')});
+  lanes.dataset.visibleStage=Object.keys(stages)[0];
+  const stagePicker=h('label',{class:'kb-stage-picker'},t('查看阶段','View stage'),
+    h('select',{class:'input',onchange:event=>{
+      lanes.dataset.visibleStage=event.target.value;
+      lanes.querySelectorAll('.kb-lane').forEach(lane=>lane.classList.toggle('kb-active',lane.dataset.stage===event.target.value));
+    }},Object.entries(stages).map(([key,[name]])=>h('option',{value:key,text:name}))));
   const notice=h('p',{role:'status',class:'kb-status'}),gapText=t('待补条件','Blocked');
   const loadNotice=h('p',{role:'status',class:'kb-status',text:t('正在加载看板…','Loading board…')});
-  fill(panel,header,lanes,loadNotice,notice);
+  fill(panel,header,stagePicker,lanes,loadNotice,notice);
   async function load(){
     clearTimeout(timer);const ticket=++sequence;
     try{
@@ -194,7 +200,7 @@ function renderTaskKanban(panel){
         antButton(t('新建任务','New task'),async()=>{if(await newKanbanTask(id))await load();},{type:'primary'})));
     fill(lanes,...Object.entries(stages).map(([key,[name]])=>{
       const tasks=board.tasks.filter(task=>task.stage===key);
-      const lane=h('section',{class:'kb-lane kb-'+key,'aria-label':name,'data-stage':key,
+      const lane=h('section',{class:'kb-lane kb-'+key+(key===lanes.dataset.visibleStage?' kb-active':''),'aria-label':name,'data-stage':key,
         ondragover:e=>{if(dragged&&board.moves[dragged.stage].includes(key)&&dragged.stage!==key){e.preventDefault();e.dataTransfer.dropEffect='move';}},
         ondrop:e=>{e.preventDefault();const task=dragged;dragged=null;if(task && task.stage!==key)move(task,key);}});
       append(lane,[h('header',{},h('i',{'aria-hidden':'true'}),h('h3',{text:name}),h('span',{class:'kb-count',text:String(tasks.length)})),

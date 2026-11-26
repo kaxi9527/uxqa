@@ -11,7 +11,7 @@ export function dataDir(): string {
   return process.env.UXQA_HOME ?? join(homedir(), '.uxqa');
 }
 
-export interface PageSettings { baseUrl: string; routes: string[]; storageState?: string; discover: boolean }
+export interface PageSettings { baseUrl: string; routes: string[]; storageState?: string; readySelector?: string; discover: boolean }
 
 export interface ProjectEntry { id: string; name: string; root: string; addedAt: string; pages?: PageSettings }
 

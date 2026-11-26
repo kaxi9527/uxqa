@@ -120,6 +120,7 @@ export interface HarnessConfig {
   baseUrl: string;
   storageState?: string;
   routes: string[];
+  readiness?: Record<string, { selector: string; timeoutMs: number }>;
   viewports: ViewportConfig[];
   flows: FlowConfig[];
   journeys?: BusinessJourney[];

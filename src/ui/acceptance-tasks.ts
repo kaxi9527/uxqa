@@ -14,6 +14,7 @@ import {assuranceCatalog} from '../guidance/assurance.js';
 import type {BusinessJourney} from '../types.js';
 
 type Input=Record<string,unknown>;
+import { draftPassage } from '../requirement-drafts.js';
 interface Fields {actor:string; condition:string; action:string; expected:string}
 interface Attempt {id:string;at:string;planId:string;status:string;detail:string;controls?:string[];messageId?:string;repairOf?:string;edited?:string[];roundId?:string}
 const priorities:Priority[]=['P0','P1','P2','P3'];
@@ -106,12 +107,7 @@ export async function taskDrafts(p:ProjectEntry,input:Input){
   const offset=Number(input.offset??0);
   if(!Number.isSafeInteger(offset)||offset<0)return reject('页码无效 / Invalid offset');
   const drafts=source.passages.slice(offset,offset+25).map(({locator,text},i)=>{
-    const get=(pattern:RegExp)=>pattern.exec(text)?.[1]?.trim()||'';
-    const actor=get(/(?:角色|参与者|actor|role)\s*[:：]\s*([^；;。\n]+)/i)||get(/(?:作为|as an? )\s*([^，,。\n]+)/i);
-    const condition=get(/(?:前提|条件|given|前置条件)\s*[:：]?\s*([^；;。\n]+)/i)||get(/当([^，,。\n]+)时/);
-    const action=get(/(?:操作|动作|when)\s*[:：]?\s*([^；;。\n]+)/i);
-    const expected=get(/(?:预期|结果|then)\s*[:：]?\s*([^；;。\n]+)/i)||get(/((?:必须|应当|应该|应显示|must |should )[^。；;\n]+)/i);
-    return {source:source.id,index:offset+i,locator,quote:text.slice(0,4000),actor,condition,action,expected};
+    return {source:source.id,index:offset+i,locator,quote:text,...draftPassage(text)};
   });
   if(input.model===true && drafts.length){
     const settings=await readAiSettings();
@@ -167,6 +163,7 @@ export async function taskAction(p:ProjectEntry,input:Input){
   busy.add(p.id);
   try{
     const state=read(p);
+    let createdTaskId:string|undefined;
     if(input.op==='board-create'){
       const id=randomUUID(),at=new Date().toISOString(),action=field(input.title,160),expected=field(input.expected,4000),locator=field(input.locator,500);
       if(!action||!expected||!locator)return reject('请填写任务、验收预期和位置 / Enter a task, an expected outcome and a location');
@@ -194,7 +191,8 @@ export async function taskAction(p:ProjectEntry,input:Input){
       const quote=field(input.quote,4000);
       if(!quote||!passage.text.includes(quote))return reject('原文版本不匹配 / The source excerpt changed');
       const clause=await addClause(p,{source:source.name,locator:passage.locator,quote,evidenceId:source.id,index:i,purpose:'requirement',suites:['logic']});
-      state.tasks.push({...fields,id:randomUUID(),source:source.id,imported:source.at,locator:source.name+' · '+passage.locator,quote,revision:source.revision,clauseId:clause.id,attempts:[],priorityMode:state.defaultPriority??'auto'});
+      createdTaskId=randomUUID();
+      state.tasks.push({...fields,id:createdTaskId,source:source.id,imported:source.at,locator:source.name+' · '+passage.locator,quote,revision:source.revision,clauseId:clause.id,attempts:[],priorityMode:state.defaultPriority??'auto'});
     }else if(input.op==='feedback'){
       const round=await getRound(p.id,field(input.roundId)),target=field(input.target),choice=field(input.choice),note=field(input.note),observer=field(input.observer,80);
       if(!round||!observer||!['issue','acceptable','missed'].includes(choice)||((choice==='missed'||input.impact===true)&&!note))return reject('漏检或严重影响请写明实际现象 / Describe the observation for a missed or high-impact issue');
@@ -317,6 +315,6 @@ export async function taskAction(p:ProjectEntry,input:Input){
       }else return reject('无效操作 / Unknown task action');
     }
     save(p,state);
-    return taskWorkspace(p);
+    return {...taskWorkspace(p),...(createdTaskId?{createdTaskId}:{})};
   }finally{busy.delete(p.id);}
 }

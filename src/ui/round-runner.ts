@@ -39,6 +39,7 @@ export async function runRound(entry: ProjectEntry, options: { signal?: AbortSig
       const routes = entry.pages.discover ? [...new Set([...entry.pages.routes, ...await routesFromSource(result.productRoot)])].slice(0, 24) : entry.pages.routes;
       capture = await capturePages(result.violations, {
         baseUrl: entry.pages.baseUrl, routes, discover: entry.pages.discover,
+        readySelector: entry.pages.readySelector,
         ...(entry.pages.storageState ? { storageState: entry.pages.storageState } : {}),
       }, shotsDir(entry.id, roundId), {
         ...(options.signal ? { signal: options.signal } : {}),
@@ -53,7 +54,7 @@ export async function runRound(entry: ProjectEntry, options: { signal?: AbortSig
         const ruleFile = await readRuleFile(result.productRoot);
         const ruleSet = buildRuleSet(ruleFile.raw, ruleFile.path);
         const inventory = await readInventory(result.productRoot, { ...(ruleSet.libraryRoot ? { root: ruleSet.libraryRoot } : {}), libraries: ruleSet.libraries });
-        const visual = await auditVisual({ baseUrl: entry.pages.baseUrl, routes: opened, productRoot: result.productRoot, ...(entry.pages.storageState ? { storageState: entry.pages.storageState } : {}) }, shotsDir(entry.id, roundId), {
+        const visual = await auditVisual({ baseUrl: entry.pages.baseUrl, routes: opened, productRoot: result.productRoot, readySelector: entry.pages.readySelector, ...(entry.pages.storageState ? { storageState: entry.pages.storageState } : {}) }, shotsDir(entry.id, roundId), {
           ...(options.signal ? { signal: options.signal } : {}),
           progress: (message) => progress({ phase: 'pages', message }),
           disabled: new Set(ruleSet.visual.filter((rule) => rule.level === 'off').map((rule) => rule.id)),

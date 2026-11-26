@@ -1,4 +1,5 @@
 import type { FigmaChunk, FigmaConfig, FigmaIndex } from './types.js';
+import { contentFingerprint, inventoryFingerprint } from './semantics.js';
 
 type Obj = Record<string, unknown>;
 const object = (v: unknown, path: string): Obj => {
@@ -31,11 +32,18 @@ function color(v: unknown, path: string, nullable = true): void {
 function unique(values: string[], path: string): void {
   if (new Set(values).size !== values.length) throw new Error(`${path}: duplicate values`);
 }
-function meta(v: Obj): void {
+export function validateMeta(v: Obj): void {
   if (v.schemaVersion !== 1) throw new Error('Unsupported Figma snapshot schemaVersion');
+  if(v.contentFingerprint!==undefined)string(v.contentFingerprint,'content fingerprint');
+  if(v.fileKeyObserved!==undefined)bool(v.fileKeyObserved,'file key observation');
   if (!/^[a-zA-Z0-9_-]+$/.test(string(v.fileKey, 'fileKey'))) throw new Error('Invalid fileKey');
   id(v.pageId, 'pageId'); string(v.exportId, 'exportId');
   if (!Number.isFinite(Date.parse(string(v.capturedAt, 'capturedAt')))) throw new Error('Invalid capturedAt');
+  if (v.inventory !== undefined) {
+    const i=object(v.inventory,'inventory');
+    if (!Number.isSafeInteger(i.total) || finite(i.total,'inventory.total')>50000) throw new Error('Invalid page inventory count');
+    string(i.fingerprint,'inventory.fingerprint');
+  }
 }
 export function validateConfig(raw: unknown): FigmaConfig {
   const c = object(raw, 'config');
@@ -44,11 +52,19 @@ export function validateConfig(raw: unknown): FigmaConfig {
   const names = array(c.themes, 'themes').map((v, i) => {
     const t = object(v, `themes[${i}]`); string(t.name, 'theme.name'); color(t.background, 'theme.background', false);
     if ((t.background as number[])[3] !== 1) throw new Error('Theme background must be opaque');
+    if(t.mode!==undefined)string(t.mode,'theme.mode');
+    if(t.modes!==undefined)Object.values(object(t.modes,'theme.modes')).forEach(x=>string(x,'collection mode'));
     if (t.backgroundVariableId !== undefined && !/^VariableID:\d+:\d+$/.test(string(t.backgroundVariableId, 'backgroundVariableId'))) throw new Error('Invalid backgroundVariableId');
     return t.name as string;
   });
   if (!names.length || names.length > 8) throw new Error('Provide 1–8 explicit themes');
   unique(names, 'themes');
+  if(c.sameFacts!==undefined)array(c.sameFacts,'sameFacts').forEach(raw=>{
+    const fact=object(raw,'same fact');string(fact.name,'same fact name');
+    for(const side of ['left','right']){
+      const refs=object(fact[side],side);unique(['object','field','version','value'].map(k=>id(refs[k],k)),side+' evidence nodes');
+    }
+  });
   for (const key of ['forbiddenFonts', 'allowedColorPrefixes']) if (c[key] !== undefined) array(c[key], key).forEach(x => string(x, key));
   if (c.tokenExpectations !== undefined) array(c.tokenExpectations, 'tokenExpectations').forEach(raw => {
     const t = object(raw, 'tokenExpectation');
@@ -58,14 +74,15 @@ export function validateConfig(raw: unknown): FigmaConfig {
   return c as unknown as FigmaConfig;
 }
 export function validateIndex(raw: unknown): FigmaIndex {
-  const v = object(raw, 'index'); meta(v);
+  const v = object(raw, 'index'); validateMeta(v);
   if (v.kind !== 'index') throw new Error('Expected Figma index');
   string(v.pageName, 'pageName');
   const ids = array(v.componentIds, 'componentIds').map(x => id(x, 'componentIds'));
-  if (!ids.length) throw new Error('Empty component inventory cannot be audited');
+  if (!ids.length && !v.inventory) throw new Error('Empty component inventory has no page evidence');
   unique(ids, 'componentIds');
   const themes = array(v.themes, 'themes').map(x => string(x, 'theme'));
   if (!themes.length) throw new Error('Empty themes'); unique(themes, 'themes');
+  if(v.modeBindings!==undefined)array(v.modeBindings,'modeBindings').forEach(raw=>{const b=object(raw,'mode binding');string(b.collection,'collection');string(b.mode,'mode');if(!themes.includes(string(b.theme,'theme')))throw new Error('Unknown mapped theme');});
   for (const key of ['forbiddenFonts', 'allowedColorPrefixes']) if (v[key] !== undefined) array(v[key], key).forEach(x => string(x, key));
   if (v.tokenObservations !== undefined) array(v.tokenObservations, 'tokenObservations').forEach(raw => {
     const t = object(raw, 'tokenObservation'); string(t.id, 'token.id');
@@ -75,12 +92,17 @@ export function validateIndex(raw: unknown): FigmaIndex {
   return v as unknown as FigmaIndex;
 }
 export function validateChunk(raw: unknown, index: FigmaIndex): FigmaChunk {
-  const v = object(raw, 'chunk'); meta(v);
+  const v = object(raw, 'chunk'); validateMeta(v);
   if (v.kind !== 'components') throw new Error('Expected component chunk');
+  if(v.contentFingerprint!==undefined&&contentFingerprint(v)!==v.contentFingerprint)throw new Error('Component payload changed since capture; ingest its original return');
   for (const key of ['fileKey', 'pageId', 'exportId'] as const) if (v[key] !== index[key]) throw new Error(`Snapshot scope mismatch: ${key}`);
+  const indexed=new Set(index.componentIds),proof=index.inventory;
+  const batchProof=(v as unknown as FigmaChunk).inventory;
+  const shortened=proof && (proof.total!==indexed.size || proof.fingerprint!==inventoryFingerprint(index.componentIds)) &&
+    batchProof?.total===proof.total && batchProof.fingerprint===proof.fingerprint && v.contentFingerprint!==undefined;
   const ids = array(v.components, 'components').map((rawComponent, i) => {
     const c = object(rawComponent, `components[${i}]`); const nodeId = id(c.id, 'component.id');
-    if (!index.componentIds.includes(nodeId)) throw new Error(`Component outside indexed page: ${nodeId}`);
+    if (!indexed.has(nodeId)&&!shortened) throw new Error(`Component outside indexed page: ${nodeId}`);
     string(c.name, 'component.name'); string(c.setName, 'setName'); if (c.setId !== null) id(c.setId, 'setId');
     for (const value of Object.values(object(c.properties, 'properties'))) string(value, 'variant value');
     finite(c.width, 'width'); finite(c.height, 'height'); bool(c.disabled, 'disabled');

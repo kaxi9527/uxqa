@@ -1,16 +1,38 @@
 import type { Page } from 'playwright';
 import { matchesUrl } from './glob.js';
 import { resolveTarget } from './locator.js';
-import type { Step } from './types.js';
+import type { Step, Target } from './types.js';
 
 export interface StepContext {
   /** Requests observed since the flow started (method upper-case, absolute URL). */
   requests: Array<{ method: string; url: string }>;
   timeoutMs?: number;
+  onDiagnostic?: (message:string)=>void;
   recovery?: { injected: boolean; recovered: boolean };
 }
 
 const LIVE_REGION = '[role="status"],[role="alert"],[role="log"],[aria-live="polite"],[aria-live="assertive"],output';
+
+async function bindingHint(page:Page,target:Extract<Target,{role:string}>,name:string){
+  const declared=await page.locator('[role]').evaluateAll(nodes=>Array.from(new Set(nodes.flatMap(n=>(n.getAttribute('role')??'').split(/\s+/).filter(Boolean)))));
+  const roles=new Set(['button','link','tab','menuitem','checkbox','radio','textbox','searchbox','combobox','listbox','option','heading','img','slider','spinbutton','progressbar','navigation','region','form','table','group',...declared]);
+  roles.delete(target.role);
+  const observations=await Promise.all([...roles].map(async role=>{
+    // ARIA authors can supply fallback or unsupported roles. Only report a name the browser locator confirms.
+    const count=await page.getByRole(role as typeof target.role,{name,exact:true}).count().catch(()=>0);
+    return count?count+' '+role:null;
+  }));
+  const texts=await page.getByText(name,{exact:true}).filter({visible:true}).count();
+  if(texts)observations.push(texts+' visible text');
+  if(name.length>=3){
+    const prefix=name.slice(0,Math.min(8,name.length-1)).replace(/[.*+?^$\x7b\x7d()|[\]\\]/g,'\\$&');
+    const near=page.getByRole(target.role,{name:new RegExp('^'+prefix,'i')});
+    const snapshot=await near.count()?await near.first().ariaSnapshot({depth:1,timeout:150}).catch(()=>''):'';
+    if(snapshot)observations.push('similar: '+snapshot.split('\n')[0].slice(0,120));
+  }
+  const alternatives=observations.filter(Boolean).join(', ');
+  return alternatives?'Expected '+target.role+' '+JSON.stringify(name)+' (0 visible matches); observed '+alternatives+'. Verify the binding.':'';
+}
 
 async function poll<T>(read: () => Promise<T>, accept: (value: T) => boolean, describe: (value: T) => string, timeoutMs: number): Promise<void> {
   const deadline = Date.now() + timeoutMs;
@@ -69,7 +91,24 @@ export async function executeStep(page: Page, step: Step, context?: StepContext)
     }
   }
 
-  const locator = resolveTarget(page, step.target);
+  const target=step.target;
+  const locator = resolveTarget(page, target);
+  // Give an early binding hint while preserving the full wait for slowly appearing controls.
+  if('role' in target && target.name && ['expectVisible','waitFor','click','fill','press','selectOption'].includes(step.action)){
+    const firstWait=Math.min(650,timeout);
+    try{await locator.first().waitFor({state:'visible',timeout:firstWait});}
+    catch(error){
+      const hint=await bindingHint(page,target,target.name).catch(()=>'');
+      if(hint)context?.onDiagnostic?.(hint);
+      try{
+        if(timeout<=firstWait)throw error;
+        await locator.first().waitFor({state:'visible',timeout:timeout-firstWait});
+      }catch(finalError){
+        const finalHint=await bindingHint(page,target,target.name).catch(()=>'');
+        throw Error((finalError instanceof Error?finalError.message:String(finalError))+(finalHint?' · '+finalHint:''));
+      }
+    }
+  }
   switch (step.action) {
     case 'click': await locator.click(); break;
     case 'fill': await locator.fill(step.value); break;

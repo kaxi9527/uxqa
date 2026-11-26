@@ -9,6 +9,7 @@ import { renderFigmaReport } from '../src/figma/reports.js';
 import { validateChunk, validateConfig, validateIndex } from '../src/figma/validate.js';
 import type { FigmaChunk, FigmaComponent, FigmaConfig, FigmaIndex } from '../src/figma/types.js';
 import { unpackCapture } from '../src/figma/transport.js';
+import { contentFingerprint, inventoryFingerprint } from '../src/figma/semantics.js';
 
 const meta = { schemaVersion: 1 as const, exportId: 'test-round', fileKey: 'testFile', pageId: '1:1', capturedAt: '2026-11-02T10:00:00.000Z' };
 const config: FigmaConfig = { fileKey: meta.fileKey, pageId: meta.pageId, themes: [{ name: 'Light', background: [1, 1, 1, 1] }] };
@@ -17,8 +18,9 @@ const component = (id = '1:2'): FigmaComponent => ({
   themes: [{ theme: 'Light', appearance: 'black', unknown: [], boundary: { id, color: [0, 0, 0, .5], inside: [1, 1, 1, 1], outside: [1, 1, 1, 1], weight: 1, align: 'INSIDE', variables: [] },
     texts: [{ id: '1:3', text: '保存设置', foreground: [0, 0, 0, 1], background: [1, 1, 1, 1], fontSize: 14, bold: false, clipped: false, disabled: false }] }],
 });
-const index = (ids = ['1:2']): FigmaIndex => ({ ...meta, kind: 'index', pageName: 'Test library', componentIds: ids, themes: ['Light'] });
-const chunk = (components = [component()]): FigmaChunk => ({ ...meta, kind: 'components', components });
+const inventory=(ids:string[])=>({total:ids.length,fingerprint:inventoryFingerprint(ids)});
+const index = (ids = ['1:2']): FigmaIndex => ({ ...meta, kind: 'index', pageName: 'Test library', componentIds: ids, inventory:inventory(ids), themes: ['Light'] });
+const chunk = (components = [component()]): FigmaChunk => ({ ...meta, kind: 'components', components,inventory:inventory(components.map(c=>c.id)) });
 const dirs: string[] = [];
 afterEach(async () => { vi.restoreAllMocks(); for (const d of dirs.splice(0)) await rm(d, { recursive: true, force: true }); });
 
@@ -26,7 +28,7 @@ describe('Figma snapshot boundary', () => {
   it('rejects invalid config, empty inventories and unsupported versions', () => {
     expect(() => validateConfig({ ...config, pageId: '../../other' })).toThrow();
     expect(() => validateConfig({ ...config, themes: [{ name: 'Light', background: [1, 1, 1, .5] }] })).toThrow();
-    expect(() => validateIndex(index([]))).toThrow(/Empty/);
+    expect(() => validateIndex({...index([]),inventory:undefined})).toThrow(/Empty/);
     expect(() => validateIndex({ ...index(), schemaVersion: 2 })).toThrow(/schemaVersion/);
   });
   it('rejects scope drift, duplicated themes and unindexed components', () => {
@@ -83,11 +85,12 @@ describe('Figma design rules', () => {
     hover.properties.Size = 'sm';
     expect(auditFigma(index(['1:2', '1:4']), [chunk([base, hover])]).checks.find(x => x.rule === 'state-feedback')?.status).toBe('not-verified');
   });
-  it('treats tiny targets, overlaps, generic copy and clipping as review candidates', () => {
+  it('reviews tiny targets, overlaps and clipping without flagging default master copy', () => {
     const c = component(); c.setName = 'Button'; c.height = 20; c.themes[0].texts[0].text = '按钮'; c.themes[0].texts[0].clipped = true;
     c.hitRegions = [{ id: '1:10', x: 0, y: 0, width: 24, height: 24, opacity: 0 }, { id: '1:11', x: 20, y: 0, width: 24, height: 24, opacity: 0 }];
     const r = auditFigma(index(), [chunk([c])]);
-    expect(r.checks.filter(x => x.status === 'review').map(x => x.rule)).toEqual(expect.arrayContaining(['target-size', 'hit-region-overlap', 'copy-placeholder', 'text-clipping']));
+    expect(r.checks.filter(x => x.status === 'review').map(x => x.rule)).toEqual(expect.arrayContaining(['target-size', 'hit-region-overlap', 'text-clipping']));
+    expect(r.checks.some(x=>x.rule==='copy-placeholder')).toBe(false);
   });
   it('flags broken icon refs and same icons across tone variants', () => {
     const a = component(), b = component('1:4');
@@ -136,7 +139,9 @@ describe('Figma CLI evidence preservation', () => {
     vi.spyOn(console, 'log').mockImplementation(() => {}); vi.spyOn(console, 'error').mockImplementation(() => {});
     const dir = await mkdtemp(join(tmpdir(), 'uxqa-figma-')); dirs.push(dir);
     const input = join(dir, 'input'); const { mkdir } = await import('node:fs/promises'); await mkdir(input);
-    const original = JSON.stringify(chunk()); await writeFile(join(input, 'index.json'), JSON.stringify(index())); await writeFile(join(input, 'chunk-001.json'), original);
+    const page=index(),batch=chunk();
+    page.contentFingerprint=contentFingerprint({...page});batch.contentFingerprint=contentFingerprint({...batch});
+    const original = JSON.stringify(batch); await writeFile(join(input, 'index.json'), JSON.stringify(page)); await writeFile(join(input, 'chunk-001.json'), original);
     const out = join(dir, 'out'); expect(await runFigmaCommand(['check', '--input', input, '--out', out])).toBe(0);
     expect((await readdir(out)).sort()).toEqual(['figma.html', 'figma.json', 'figma.md']); expect(await readFile(join(input, 'chunk-001.json'), 'utf8')).toBe(original);
     expect(await runFigmaCommand(['check', '--input', input, '--out', out])).toBe(2);

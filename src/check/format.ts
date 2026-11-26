@@ -25,7 +25,7 @@ export function formatText(result: CheckResult, options: { limit?: number } = {}
     const counts = [result.summary.newMust && `${result.summary.newMust} 个需要改`, result.summary.newDefault && `${result.summary.newDefault} 个建议改`, result.summary.newReference && `${result.summary.newReference} 个可以看看`].filter(Boolean).join('，');
     lines.push(`发现 ${fresh.length} 个新问题（${counts}）。${where}。`);
   }
-  lines.push(library, ...coverageLines(result));
+  lines.push('源码静态检查 · must 为必须处理，default 为建议。需求和页面行为需在验收任务或 uxqa run 中核对。', library, ...coverageLines(result));
   if (result.baseline && (result.summary.baseline || result.baseline.fixed)) {
     lines.push(`老问题：${result.summary.baseline} 个已记录在基线里，这次不算${result.baseline.fixed ? `；有 ${result.baseline.fixed} 个老问题本轮未再检出，需结合覆盖范围确认` : ''}。`);
   }

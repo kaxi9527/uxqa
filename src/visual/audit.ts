@@ -377,7 +377,7 @@ async function sourceFor(productRoot: string, text: string, loaded: string[], ca
 const SHOWCASE = /design-system|storybook|showcase|playground|ui-kit|kitchen-sink|components?-?(lab|gallery|demo)/i;
 const CONSISTENCY: VisualKind[] = ['size-mismatch', 'misaligned', 'card-height', 'many-font-sizes', 'mixed-radius', 'mixed-button-height'];
 
-export interface VisualTarget { baseUrl: string; routes: string[]; storageState?: string; productRoot: string }
+export interface VisualTarget { baseUrl: string; routes: string[]; storageState?: string; productRoot: string; readySelector?: string }
 /**
  * Where each control on the page came from, read from React's development-mode owner records (`_debugOwner`):
  * follow "who created this element" upwards until a library component (from the library) or a component the
@@ -506,6 +506,7 @@ export async function auditVisual(target: VisualTarget, outDir: string, options:
       try {
         await page.setViewportSize({ width: WIDTHS[0], height: 900 });
         const response = await page.goto(url, { waitUntil: 'load', timeout: 20_000 });
+        if (response?.ok()) await waitForPageReadiness(page,target.readySelector);
         await page.waitForTimeout(800);
         const landed = new URL(page.url());
         if ((response && response.status() >= 400) || (landed.pathname !== new URL(url).pathname && /log-?in|sign-?in|oauth|\/auth\b|\/auth\//i.test(landed.pathname))) continue;
@@ -571,6 +572,7 @@ export async function auditVisual(target: VisualTarget, outDir: string, options:
           await context.route('**/*', (request) => (['GET', 'HEAD', 'OPTIONS'].includes(request.request().method()) ? request.continue() : request.abort('blockedbyclient')));
           try {
           await page.goto(url, { waitUntil: 'load', timeout: 20_000 });
+          await waitForPageReadiness(page,target.readySelector);
           await page.waitForTimeout(400);
           await page.setViewportSize({ width: 1440, height: 900 });
           const openers = await inPage<Array<{ index: number; text: string; kind: string }>>(page, OPENERS_SCRIPT, { selector: OPENER_SELECTOR, risky: RISKY.source, limit: OPENER_LIMIT }).catch(() => []);
@@ -580,6 +582,7 @@ export async function auditVisual(target: VisualTarget, outDir: string, options:
             for (const width of [1440, 390]) {
               await page.goto(url, { waitUntil: 'load', timeout: 20_000 });
               await page.setViewportSize({ width, height: 900 });
+              await waitForPageReadiness(page,target.readySelector);
               await page.waitForTimeout(350);
               const before = new Set((await inPage<RawIssue[]>(page, VISUAL_SCRIPT).catch(() => [] as RawIssue[])).map((issue) => `${issue.kind}|${issue.key}|${issue.text}`));
               // Find the same opener again (by kind and text) in this layout; narrow layouts may hide it.
@@ -646,3 +649,4 @@ export async function auditVisual(target: VisualTarget, outDir: string, options:
   }
   return { violations, captures, checkedPages, widths: WIDTHS, views, reuse };
 }
+import { waitForPageReadiness } from '../page-access.js';

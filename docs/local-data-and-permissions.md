@@ -10,6 +10,7 @@
 - **需要什么权限**：读取你选中的项目目录、在自己的用户目录保存配置和报告、访问你填写的预览网址。截图由浏览器完成，无需系统录屏、辅助功能、全盘访问、摄像头、麦克风或管理员权限。保存项目规则、基线或执行组件同步时才会写入对应项目文件。
 - **数据放哪里**：Mac/Linux 默认 `~/.uxqa`，Windows 默认 `%USERPROFILE%\.uxqa`。模型与订阅账号保存在其中的 `model-core`；直接 API 设置在 `ai.json`。命令行报告还可能保存在你指定的 `--out` 目录。凭据是本地文件，不等于经过系统钥匙串加密，不要上传整个数据目录。
 - **截图保留（0.5.0 起）**：应用截图和已登记的命令行截图按文件最后修改时间保留 48 小时；应用运行时每分钟检查，关闭期间到期的截图在下次启动应用或运行检查命令时清理。命令行会核对文件身份，保留后来修改或替换的文件；默认输出目录中可由历史报告确认的截图会在下次命令行检查时登记。旧自定义输出目录无法自动发现。检查记录、对比数值、非截图报告、手动另存的副本和项目文件保留；清理后需重新检测生成截图。浏览器 trace 压缩包不会被此规则删除，可能包含截图。
+  新导出使用显式 `--out` 时由用户保留；加上 `--expire-screenshots` 才登记清理。命令会显示登记位置。已登记的历史截图沿用原策略。
 - **什么时候联网**：打开预览页面会访问该页面及其资源；安装截图浏览器会从提示的官方来源下载；登录订阅会访问服务商。启用 AI 看图复核会发送所选截图和复核上下文。0.5.2 起，项目修复对话会把本轮问题摘要、对话、实际读取的项目文件及预览资源片段发送给所选模型；有可用截图时默认附上，可手动取消。连接测试发送固定测试图。
 - **模型登录限制**：ChatGPT/Codex、Copilot 等需要有效的个人账号与套餐；Claude 还需要已安装官方 Claude Code。公开版不内置其他应用的 Google OAuth 客户端信息，Gemini Code Assist/Antigravity 订阅登录需要自行配置获准使用的客户端；Gemini API 协议可以独立使用。
 - **退出和更新**：Mac 按 ⌘Q；Windows/Linux 在启动终端按 Ctrl+C。只关浏览器标签页不会停止服务。更新前退出并备份数据，再替换应用或解压新版；历史版本可在 Releases 中选择。
@@ -74,6 +75,8 @@ that changes system packages and is optional. QA Master itself must run as your 
 | Browser binaries | macOS `~/Library/Caches/ms-playwright`; Windows `%LOCALAPPDATA%\ms-playwright`; Linux `~/.cache/ms-playwright` |
 
 From 0.5.0, app screenshots and registered CLI screenshots expire 48 hours after their last modification time. QA Master checks every minute while open and catches up on the next launch or CLI check. CLI cleanup verifies file identity and retains files subsequently modified or replaced. Unchanged screenshots identified by historical reports in the default output directory are registered on the next CLI check; undiscovered old custom output directories cannot be recovered automatically. Findings, comparison values, non-image reports, manually saved copies and project files remain. Browser trace archives are retained and may contain screenshots.
+
+New explicit `--out` exports keep screenshots by default. Add `--expire-screenshots` to register that export. Existing registrations keep their original policy.
 
 `UXQA_HOME` overrides the QA Master data root. `PLAYWRIGHT_BROWSERS_PATH` overrides the
 browser cache. A project entry references the existing source folder; it does not

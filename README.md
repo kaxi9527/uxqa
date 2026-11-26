@@ -258,6 +258,14 @@ Rules are installed before the flow loads its route and removed afterwards. Cons
 
 ## Configuration
 
+For a client-rendered route, set `"readiness": {"/settings": {"selector": "#settings-loaded", "timeoutMs": 8000}}` in scenario JSON. Select a visible element that appears only when the page is ready for inspection. A timeout marks the affected checks as blocked. In the app, project preview settings accept one optional CSS selector shared by the selected pages.
+
+Start with a UTF-8 Markdown or text requirement using `uxqa requirements --file /path/to/requirements.md`. The command accepts a file outside the code repository and prints JSON with its revision, line references, original text and candidate expectations. Each row still needs a reviewed binding. In `uxqa ui` or Desktop, drop the document into the target project, review it, then bind and run acceptance tasks. `uxqa run --config` expects a scenario JSON file. A source-only `uxqa check` reports must-fix and default advisory rules separately.
+
+The local console also supports interactive sign-in in project preview settings. CLI scenarios reuse a supplied `storageState`. An unexpected sign-in destination or a primary sign-in form with a password blocks the business-page check. Coverage summarizes all checks for each route and viewport. Mock data and configured network fault injection appear separately.
+
+Automatically managed screenshots expire after 48 hours. An explicit `--out <directory>` keeps new exports. Add `--expire-screenshots` to register a custom export for cleanup. The CLI prints the registration directory when it registers screenshots.
+
 ```json
 {
   "name": "settings smoke",
@@ -336,7 +344,7 @@ The focus-indicator, obscured-focus and clipping checks are heuristics. They com
 
 ## Component Reuse Audit
 
-For read-only Figma component checks, use `uxqa figma prepare` and `uxqa figma check`; see [Figma capture and coverage](docs/figma-readonly.md). This audits design snapshots, not browser behavior or source component reuse.
+To check a design before a product preview exists, use `uxqa figma prepare` to generate a read-only capture plugin, then import its downloaded JSON with `uxqa figma ingest`. Use `uxqa figma check` for components and themes, or `uxqa figma graph` for prototype routes and cross-screen facts. [Figma capture, coverage and CI](docs/figma-readonly.md)
 
 ```bash
 ./uxqa components --config /path/to/product.json --source /path/to/product/src

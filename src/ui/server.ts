@@ -37,6 +37,7 @@ import { coverageLines } from '../check/coverage.js';
 import { requirementChecks } from '../requirement-checks.js';
 import { settledDisagreements, calibrationMetrics, createReviewCase, reviewWorkspace, updateReviewCase } from './calibration.js';
 import { listEvidence, importEvidence, inspectRemoteCode, readCodeLink, evidenceImage } from './evidence.js';
+import { UXQA_VERSION } from '../evidence.js';
 import { taskAction, taskBoard, taskDrafts, taskRepairContext, taskWorkspace } from './acceptance-tasks.js';
 import { projectStorage } from './project-storage.js';
 import { exportBoard } from './board-export.js';
@@ -349,7 +350,7 @@ async function parseSettings(input: Record<string, unknown>): Promise<PageSettin
 async function route(request: IncomingMessage, response: ServerResponse, path: string): Promise<void> {
   const method = request.method ?? 'GET';
   const parts = path.split('/').filter(Boolean).slice(1); // after "api"
-  if (parts[0] === 'access' && method === 'GET' && parts.length === 1) return send(response, 200, { ...(await readAccessSettings()), dataLocation: dataDir().replace(homedir(), '~') });
+  if (parts[0] === 'access' && method === 'GET' && parts.length === 1) return send(response, 200, { ...(await readAccessSettings()), version: UXQA_VERSION, dataLocation: dataDir().replace(homedir(), '~') });
   if (parts[0] === 'access' && method === 'POST' && parts[1] === 'check' && parts.length === 2) {
     const input = await accessBody(request);
     if (typeof input.path !== 'string' || !input.path.trim()) throw new HttpError(400, '请填写要检查的文件夹绝对路径');

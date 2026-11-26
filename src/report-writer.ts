@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { STATUS_LABELS, summarizeRun, VERDICT_LABELS } from './report.js';
+import { STATUS_LABELS, summarizeRun, VERDICT_LABELS, screenshotNotice, type ScreenshotPolicy } from './report.js';
 import type { CheckResult, RunResult } from './types.js';
 
 const cell = (value: string) => value.replace(/\|/g, '\\|').replace(/\n/g, ' ');
@@ -10,7 +10,7 @@ function checkRow(check: CheckResult): string {
   return `| ${cell(check.requirement ?? '')} | ${check.dimension} | ${cell(check.flow ? `${check.check}: ${check.flow}` : check.check)} | \`${cell(check.route)}\` | ${cell(check.viewport)} | **${STATUS_LABELS[check.status]}** | ${cell(check.detail)} | ${evidence} |`;
 }
 
-export async function writeReports(result: RunResult, outDir: string): Promise<{ jsonPath: string; markdownPath: string }> {
+export async function writeReports(result: RunResult, outDir: string, screenshotRetention:ScreenshotPolicy='managed-48h'): Promise<{ jsonPath: string; markdownPath: string }> {
   await mkdir(outDir, { recursive: true });
   const summary = summarizeRun(result);
   const jsonPath = join(outDir, 'report.json');
@@ -26,12 +26,12 @@ export async function writeReports(result: RunResult, outDir: string): Promise<{
     `# QA Master report: ${result.configName}`,
     '',
     `Status: **${summary.status.toUpperCase()}**`,
-    `Blocking findings: ${summary.blocking}`,
+    `阻断级发现 / Blocking findings: ${summary.blocking}`,
     `Informational findings: ${summary.informational}`,
     '',
     `结论（Q-03）：**${VERDICT_LABELS[summary.verdict]}** — ${Object.entries(summary.checks).map(([status, count]) => `${STATUS_LABELS[status as keyof typeof STATUS_LABELS]} ${count}`).join(' · ')}`,
     '',
-    '完成声明只覆盖下表“通过”的自动检查；“未验证”和“阻塞”项不能视为通过。',
+    '阻断级发现统计问题的严重度；检查受阻表示缺少运行条件。页面结果综合该路由和视口的全部检查。 / Finding severity and blocked checks are counted separately. Page results aggregate scoped checks.',
     '',
     '## 检查范围 / Coverage',
     ...(result.coverage ? [
@@ -83,11 +83,11 @@ export async function writeReports(result: RunResult, outDir: string): Promise<{
     '',
     '## Artifacts',
     '',
-    'QA大师登记的截图保留 48 小时，运行期间或下次启动时清理；报告保留。 / QA Master–registered screenshots are cleaned after 48 hours while QA Master runs or on its next launch; this report remains.',
+    screenshotNotice(screenshotRetention),
     '',
     ...(result.artifacts.length === 0 ? ['No artifacts.'] : result.artifacts.map((artifact) => `- ${artifact}`)),
   ];
-  await writeFile(jsonPath, JSON.stringify({ ...result, summary }, null, 2),{mode:0o600});
+  await writeFile(jsonPath, JSON.stringify({ ...result, screenshotRetention, summary }, null, 2),{mode:0o600});
   await writeFile(markdownPath, `${lines.join('\n')}\n`,{mode:0o600});
   return { jsonPath, markdownPath };
 }

@@ -1,13 +1,18 @@
 export type Color = [number, number, number, number];
+export type FactNodes = Record<'object'|'field'|'version'|'value',string>;
 export interface FigmaConfig {
   fileKey: string;
   pageId: string;
-  themes: { name: string; background: Color; backgroundVariableId?: string }[];
+  themes: { name: string; mode?: string; modes?: Record<string,string>; background: Color; backgroundVariableId?: string }[];
   forbiddenFonts?: string[];
   allowedColorPrefixes?: string[];
   tokenExpectations?: { id: string; theme: string; expected: Color }[];
+  sameFacts?: {name:string;left:FactNodes;right:FactNodes}[];
 }
 export interface CaptureMeta {
+  contentFingerprint?:string;
+  fileKeyObserved?:boolean;
+  inventory?: { total: number; fingerprint: string };
   schemaVersion: 1;
   exportId: string;
   fileKey: string;
@@ -22,6 +27,7 @@ export interface FigmaIndex extends CaptureMeta {
   forbiddenFonts?: string[];
   allowedColorPrefixes?: string[];
   tokenObservations?: { id: string; theme: string; expected: Color; actual: Color | null }[];
+  modeBindings?: { collection: string; theme: string; mode: string }[];
 }
 export interface TextSample {
   id: string;
@@ -87,7 +93,7 @@ export interface FigmaReport {
   source: CaptureMeta & { pageName: string; inputHashes: Record<string, string>; captureEnd: string };
   status: 'complete' | 'partial';
   verdict: 'issues-found' | 'needs-review' | 'limited-pass';
-  coverage: { expectedComponents: number; capturedComponents: number; missingIds: string[]; themes: string[]; sourceDirectories?: string[]; skippedRules?: string[] };
+  coverage: { expectedComponents: number; capturedComponents: number; missingIds: string[]; themes: string[]; pageTotal?: number; inventoryEvidence?: string; sourceDirectories?: string[]; skippedRules?: string[] };
   summary: Record<CheckStatus, number>;
   checks: FigmaCheck[];
   limitations: string[];

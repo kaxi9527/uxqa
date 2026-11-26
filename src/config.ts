@@ -352,6 +352,14 @@ export function loadConfig(input: unknown): HarnessConfig {
     if (new URL(route,baseUrl).origin !== base.origin) throw new Error('All routes must have the same origin as baseUrl');
   }
   if (new Set(routes).size !== routes.length) throw new Error('routes must be unique');
+  const readiness = Object.fromEntries(Object.entries(record(source.readiness ?? {}, 'readiness')).map(([route, value]) => {
+    if (!routes.includes(route)) throw new Error('Readiness route is not configured: ' + route);
+    const entry = record(value, 'readiness entry');
+    const selector = stringValue(entry.selector, 'readiness.selector');
+    const timeoutMs = entry.timeoutMs === undefined ? 8000 : nonNegativeInteger(entry.timeoutMs, 'readiness.timeoutMs');
+    if (timeoutMs < 1 || timeoutMs > 60000) throw new Error('readiness.timeoutMs must be between 1 and 60000');
+    return [route, {selector, timeoutMs}];
+  }));
 
   const viewports = source.viewports === undefined ? DEFAULT_VIEWPORTS : source.viewports;
   if (!Array.isArray(viewports) || viewports.length === 0) throw new Error('viewports must be a non-empty array');
@@ -389,9 +397,11 @@ export function loadConfig(input: unknown): HarnessConfig {
   if (!Array.isArray(journeys)) throw new Error('journeys must be an array');
   const specialist = source.requirementChecks ?? [];
   if (!Array.isArray(specialist)) throw new Error('requirementChecks must be an array');
-  const plans=[...journeys,...specialist.map(value=>{
-    const item=record(value,'requirement check');
-    return buildRequirementCheck(item,stringValue(item.requirement,'requirement'));
+  const plans=[...journeys,...specialist.map((value,index)=>{
+    try {
+      const item=record(value,'requirement check');
+      return buildRequirementCheck(item,typeof item.requirement==='string'?item.requirement:'');
+    } catch(error){throw Error('requirementChecks['+index+']: '+(error instanceof Error?error.message:String(error)));}
   })].map(parseJourney);
   if (new Set(parsedFlows.map((flow) => flow.name)).size !== parsedFlows.length) throw new Error('flow names must be unique');
   for (const flow of parsedFlows) {
@@ -412,6 +422,7 @@ export function loadConfig(input: unknown): HarnessConfig {
       dataNature: dataNature as DataNature,
     },
     notApplicable: exclusions,
+    ...(Object.keys(readiness).length ? {readiness} : {}),
     options: {
       axe, axeTags, bestPractice, screenshots, trace,
       keyboard: booleanOption(rawOptions.keyboard, true, 'options.keyboard'),

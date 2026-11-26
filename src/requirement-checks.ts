@@ -7,6 +7,11 @@ interface Template {
   group?: {key:string; title:Label; min:number; fields:InputField[]};
 }
 export const requirementChecks: Record<string,Template> = {
+  'page-behavior': {
+    title:['页面操作与预期','Page action and expected result'],
+    method:['指定页面、可选操作和要核对的结果。隐藏断言会先确认目标在操作前可见。','Set a page, an optional action, and the observed result. A hidden assertion first confirms that the target is visible before the action.'],
+    fields:[['route','测试页面','Test route','/'],['result','结果元素 CSS 选择器','Result CSS selector','#result']]
+  },
   'setting-propagation': {
     title:['配置发布与生效','Published setting propagation'],
     method:['记录原值和独立对照，更改一个值并发布。重新打开设置，逐一读取使用它的入口，复核对照未变。','Record the original and control values, change one setting and publish it. Reopen settings, check each reader and compare the unaffected control.'],
@@ -44,12 +49,20 @@ const relation=(name:string,left:string,op:'eq'|'ne',ref:string):JourneyAssertio
 
 /** Compile reviewed project bindings; the runner validates the resulting routes, steps and references. */
 export function buildRequirementCheck(raw:unknown,requirement:string):BusinessJourney {
-  const binding=obj(raw),kind=required(binding,'kind');
-  if (!Object.hasOwn(requirementChecks,kind)) throw new Error('未知验收类型 / Unknown requirement check');
+  const binding=obj(raw),kind=binding.kind;
+  const allowed=Object.keys(requirementChecks).join(', ');
+  if (typeof kind!=='string'||!Object.hasOwn(requirementChecks,kind)) throw new Error('未知或缺失验收类型 / Unknown or missing kind. Allowed: '+allowed);
   const spec=requirementChecks[kind],get=(key:string)=>required(binding,key);
-  for (const [key,,,,optional] of spec.fields) if(!optional) get(key);
   const groups=spec.group ? binding[spec.group.key] : [];
-  if (!Array.isArray(groups) || groups.length<(spec.group?.min ?? 0)) throw new Error('请补齐入口或角色 / Missing readers or recipients');
+  const missing=spec.fields.filter(([key,,,,optional])=>!optional && !(typeof binding[key]==='string' && binding[key].trim())).map(([key])=>key);
+  if(!requirement.trim())missing.unshift('requirement');
+  if(kind==='return-state'&&!binding.outcome)missing.push('outcome');
+  if(spec.group && (!Array.isArray(groups)||groups.length<spec.group.min))missing.push(spec.group.key);
+  if(spec.group && Array.isArray(groups))groups.forEach((value,i)=>{
+    for(const [key] of spec.group!.fields)if(typeof value?.[key]!=='string'||!value[key].trim())missing.push(spec.group!.key+'['+i+'].'+key);
+  });
+  if(missing.length)throw Error(kind+' · 缺少字段 / Missing: '+missing.join(', ')+'. Allowed kinds: '+allowed);
+  if(!Array.isArray(groups))throw Error('Invalid group');
   const entries=groups.map(value=>{
     const row=obj(value);
     return Object.fromEntries(spec.group!.fields.map(([key])=>[key,required(row,key)]));
@@ -58,7 +71,24 @@ export function buildRequirementCheck(raw:unknown,requirement:string):BusinessJo
   function phase(name:string,path:string,params:Partial<Phase>,actor='operator') {
     phases.push({name,actor,route:path,steps:[],exactRoute:true,...params});
   }
-  if (kind==='setting-propagation') {
+  if (kind==='page-behavior') {
+    const target={css:get('result')}, action=binding.action, assertion=binding.assertion;
+    const steps:Step[]=[];
+    if (assertion==='hidden') {
+      if (action==='none') throw new Error('核验隐藏需要选择一个操作 / Choose an action for a hidden result');
+      steps.push({action:'waitFor',target});
+    }
+    if (action==='click') steps.push(click(get('target')));
+    else if (action==='fill') {
+      if (typeof binding.value!=='string') throw new Error('请填写输入值 / Enter a value to fill');
+      steps.push({action:'fill',target:{css:get('target')},value:binding.value});
+    } else if (action!=='none') throw new Error('请选择操作 / Choose a page action');
+    if (assertion==='text') steps.push({action:'expectVisible',target},{action:'expectText',target,text:get('text'),exact:true});
+    else if (assertion==='visible') steps.push({action:'expectVisible',target});
+    else if (assertion==='hidden') steps.push({action:'expectHidden',target});
+    else throw new Error('请选择预期结果 / Choose an expected result');
+    phase('页面操作与预期 / Page action and expected result',route,{exactRoute:true,steps});
+  } else if (kind==='setting-propagation') {
     const field=get('field'), controlRoute=get('controlRoute'), control=get('control');
     const points=[{route,selector:field},...entries,{route:controlRoute,selector:control}];
     if(new Set(points.map(p=>JSON.stringify([new URL(p.route,'https://project.invalid').href,p.selector]))).size!==points.length)

@@ -204,6 +204,7 @@ try {
   await browser.close(); browser = undefined;
   const route = `/?settings=1#t=${token}`;
   const scenario = { name: 'UXQA desktop model settings', baseUrl: origin, routes: [route],
+    readiness: { [route]: { selector: 'html[data-qa-ready="true"] #workspace h1' } },
     viewports: [{ name: 'desktop', width: 1280, height: 900 }, { name: 'compact-window', width: 680, height: 800 }],
     options: { axe: true, screenshots: true, trace: 'on-failure' },
     flows: [{ name: 'model connection choices', requirement: 'DESKTOP-MODELS-UI', route, steps: [

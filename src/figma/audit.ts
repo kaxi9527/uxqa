@@ -1,4 +1,5 @@
 import type { Color, FigmaCheck, FigmaChunk, FigmaComponent, FigmaIndex, FigmaReport } from './types.js';
+import { contentFingerprint, disabledProperties, inventoryFingerprint } from './semantics.js';
 
 export function composite(foreground: Color, background: Color): Color {
   return [0, 1, 2].map(i => foreground[i] * foreground[3] + background[i] * (1 - foreground[3])).concat(1) as Color;
@@ -10,20 +11,30 @@ export function contrast(a: Color, b: Color): number {
   return (Math.max(l1, l2) + .05) / (Math.min(l1, l2) + .05);
 }
 const INPUT = /(?:\bInput\b|\bTextarea\b|\bSelect\b|\bCombobox\b|\bField\b|ChatComposer|输入框|文本域)/i;
-const CONTROL = /(?:\bButton\b|IconButton|\bCheckbox\b|\bRadio\b|\bSwitch\b|\bToggle\b|\bRating\b|\bTag\b|SubagentSwitcher)/i;
+const CONTROL = /(?:\bButton\b|IconButton|\bCheckbox\b|\bRadio\b|\bSwitch\b|\bToggle\b|\bRating\b|\bTag\b|SubagentSwitcher|按钮|复选框|单选|开关|标签)/i;
 const NOTICE = /(?:\bToast\b|ToastShell|\bAlert\b)/i;
-const PLACEHOLDER = /^(?:按钮|选项|好的|确认|页面标题|标题文本|占位文本|button|label|your text|title here)$/i;
 const STATE = /^(?:state|interaction|状态|交互状态)$/i;
 const DEFAULT = /^(?:default|normal|rest|idle|enabled|默认|正常)$/i;
 const ACTIVE = /^(?:hover|hovered|pressed|active|focus|focused|focus-visible|悬停|按下|聚焦)$/i;
 
-export function auditFigma(index: FigmaIndex, chunks: FigmaChunk[], inputHashes: Record<string, string> = {}): FigmaReport {
-  const components = chunks.flatMap(c => c.components), seen = new Set<string>();
+export function auditFigma(index: FigmaIndex, chunks: FigmaChunk[], inputHashes: Record<string, string> = {}, receiptHash?:string): FigmaReport {
+  const components = chunks.flatMap(c => c.components).map(c=>disabledProperties(c.properties)?{...c,disabled:true}:c), seen = new Set<string>();
   for (const c of components) {
     if (seen.has(c.id)) throw new Error(`Duplicate component across chunks: ${c.id}`);
     seen.add(c.id);
   }
   const missingIds = index.componentIds.filter(id => !seen.has(id));
+  const fingerprint=inventoryFingerprint(index.componentIds),witness=index.inventory;
+  const counts=new Set([witness,...chunks.map(c=>c.inventory)].flatMap(w=>w?[w.total]:[]));
+  const pageTotal=counts.size===1?[...counts][0]:undefined;
+  const notes:string[]=[];
+  if(witness&&(!index.contentFingerprint||chunks.some(c=>!c.contentFingerprint)))notes.push('缺少原始采集内容指纹 / Missing original capture checksum');
+  if(index.contentFingerprint!==undefined&&index.contentFingerprint!==contentFingerprint({...index}))notes.push('采集后索引内容已变化 / Original index content changed');
+  if(!witness)notes.push('旧索引未记录整页清单 / No original page inventory');
+  else if(witness.total!==index.componentIds.length||witness.fingerprint!==fingerprint)notes.push('索引与采集时整页清单不符 / Index was changed');
+  if(!chunks.length||chunks.some(c=>!c.inventory||c.inventory.total!==index.componentIds.length||c.inventory.fingerprint!==fingerprint))notes.push('批次未能独立对账整页清单 / Missing or conflicting batch inventory');
+  if(receiptHash!==undefined&&receiptHash!==inputHashes['index.json'])notes.push('原始导入 SHA-256 不符 / Ingested index hash changed');
+  const partial=!!(notes.length||missingIds.length||!components.length);
   const checks: FigmaCheck[] = [];
   const add = (c: FigmaComponent, rule: string, status: FigmaCheck['status'], message: string, extra: Partial<FigmaCheck> = {}) => {
     checks.push({ rule, status, nodeId: c.id, component: `${c.setName} / ${c.name}`, message, ...extra });
@@ -36,7 +47,8 @@ export function auditFigma(index: FigmaIndex, chunks: FigmaChunk[], inputHashes:
       if (outside.length) add(c, 'color-binding-contract', 'review', `颜色未走声明的产品别名前缀：${outside.map(b => b.name).join(', ')}；需确认继承或例外。`);
       if (c.unboundPaints) add(c, 'unbound-paint', 'review', `${c.unboundPaints} 处实色画笔未绑定变量；包含图标内部笔画，需区分业务配色与保留笔触。`);
     }
-    if (c.disabled) { add(c, 'disabled-exclusion', 'excluded', '禁用变体不适用对比度、点击尺寸及状态反馈要求。'); continue; }
+    for (const icon of c.icons) if (icon.startsWith('MISSING:')) add(c, 'icon-reference', 'fail', '图标主组件引用无法解析。', { nodeId: icon.slice(8) });
+    if (c.disabled) { add(c, 'disabled-exclusion', 'excluded', '禁用变体按本规则豁免对比度、点击尺寸和状态反馈。若产品另有禁用态可读性规范，请用各主题最终合成画面复核。'); continue; }
     if (CONTROL.test(c.setName)) {
       const size = Math.min(c.width, c.height);
       add(c, 'target-size', size >= 24 ? 'pass' : 'review', size >= 24 ? '组件设计边界至少 24×24；实际点击绑定仍需代码验证。' : '组件边界小于 24；需核对是否有外部热区或适用例外。', { observed: +size.toFixed(2), threshold: 24 });
@@ -72,9 +84,6 @@ export function auditFigma(index: FigmaIndex, chunks: FigmaChunk[], inputHashes:
         }
       }
     }
-    for (const s of c.themes[0].texts) if (PLACEHOLDER.test(s.text.trim()))
-      add(c, 'copy-placeholder', 'review', `泛化或占位文案“${s.text.trim()}”；结合业务语义判断，不能自动替换。`, { nodeId: s.id });
-    for (const icon of c.icons) if (icon.startsWith('MISSING:')) add(c, 'icon-reference', 'fail', '图标主组件引用无法解析。', { nodeId: icon.slice(8) });
     if (NOTICE.test(c.setName) && !c.icons.length) add(c, 'notice-icon', 'review', '未找到可识别的图标实例；可能使用了向量图形，需要人工确认语气是否只靠颜色。');
   }
   for (const c of components.filter(c => !c.disabled)) {
@@ -114,9 +123,10 @@ export function auditFigma(index: FigmaIndex, chunks: FigmaChunk[], inputHashes:
     mergeCandidates.push({ sets: ids, names: ids.map(id => groups.get(id)!), reason: '至少一个变体具有相同的可见节点类型/层级骨架。需进一步核对业务目的、信息模型、交互行为和属性合同；结构相同本身不构成合并结论。', requiresSemanticReview: true });
   }
   return {
-    schemaVersion: 1, source: { schemaVersion: 1, exportId: index.exportId, fileKey: index.fileKey, pageId: index.pageId, capturedAt: index.capturedAt, pageName: index.pageName, captureEnd, inputHashes },
-    status: missingIds.length ? 'partial' : 'complete', verdict: summary.fail ? 'issues-found' : missingIds.length || summary.review || summary['not-verified'] ? 'needs-review' : 'limited-pass',
+    schemaVersion: 1, source: { schemaVersion: 1, exportId: index.exportId, fileKey: index.fileKey, fileKeyObserved:index.fileKeyObserved, pageId: index.pageId, capturedAt: index.capturedAt, pageName: index.pageName, captureEnd, inputHashes },
+    status: partial ? 'partial' : 'complete', verdict: summary.fail ? 'issues-found' : partial || summary.review || summary['not-verified'] ? 'needs-review' : 'limited-pass',
     coverage: { expectedComponents: index.componentIds.length, capturedComponents: components.length, missingIds, themes: index.themes,
+      pageTotal,inventoryEvidence:notes.join(' · ')||'原始清单与各批次一致 / Page and batch inventories agree',
       sourceDirectories: [], skippedRules: [...new Set(checks.filter(c => c.status === 'excluded' || c.status === 'not-verified').map(c => c.rule))] }, summary, checks, catalog, mergeCandidates,
     limitations: [
       '仅审计索引中的原生组件主件；页面中的独立实例、模板组合和运行时代码不包含在此覆盖中。',

@@ -142,7 +142,7 @@ it('completes blind review and opens its metrics through the desktop interface',
     await dialog.getByRole('button',{name:'Close',exact:true}).click();await page.reload();
     await page.getByLabel('Check category',{exact:true}).selectOption('interaction');
     await page.getByText(/Procedures with a definite human result 1\/3/).waitFor();
-    await page.getByRole('button',{name:'Create verification tasks'}).click();
+    await page.getByRole('button',{name:'Plan a review for this run'}).click();
     await dialog.locator('details.verification-task > summary').first().click();
     await dialog.getByRole('button',{name:'Create a blind review case for this procedure'}).first().click();
     await dialog.getByLabel('Observable acceptance criterion').waitFor();

@@ -36,6 +36,10 @@ QA Master checks frontend projects locally, combining browser evidence with opti
 
 ## Import check sources
 
+After importing requirements, open Check → Logic → Check a requirement. Choose **Page action and expected result** to bind a click or fill to an exact text, visible state, or transition to hidden. Set the test address in Preview settings before running. For client-rendered pages, you can also enter a shared readiness selector.
+
+For Markdown or plain text, `uxqa requirements --file <path>` reads an explicitly selected file, including one outside the code project. Its JSON keeps the source line and marks unbound candidates. To store it in a project and execute reviewed tasks, drop the file into the console or desktop project. Capture sign-in in project preview settings. For new CLI reports, a custom `--out` keeps screenshots unless you also pass `--expire-screenshots`.
+
 Choose a check category in the project’s **Check** tab. Drop files onto **Drop project sources** or choose files from disk. To attach the same file to several checks, open **Add link or repository**, select the categories, then drop the files. Expand **Sources for this check**, choose a passage, review its location and applicable categories, and save it. Importing a revised file creates a new snapshot. Existing clauses retain their original revision.
 
 | Source | How it is used |
@@ -50,6 +54,8 @@ Choose a check category in the project’s **Check** tab. Drop files onto **Drop
 **Offline use and models.** QA Master requires no hosted backend. Local extraction, cached evidence, source scans and pixel comparisons work without a model. For scenario generation or image interpretation, select Ollama, LM Studio or a compatible LAN address in model settings and choose an installed model. Image interpretation requires a vision-capable model. A cloud endpoint receives the selected excerpt and project context. Initial browser/model downloads and remote-source reads require access to their hosts. Saved snapshots remain available offline.
 
 ## Add a project and run a check
+
+For design-stage QA, use the Figma capture plugin to download a page locally. `uxqa figma check` compares component states and themes. `uxqa figma graph` traces prototype navigation and checks declared facts across screens. A product preview is needed for runtime assertions, including keyboard focus, hit testing and persisted changes. [Figma setup, commands and coverage](figma-readonly.md)
 
 Add an existing project folder, inspect the discovered component library and project rules, and start a source check. Source checks are read-only by default. For rendered pages, start the project's preview server and configure its URL. The optional screenshot browser can be downloaded after you review and confirm the download.
 
