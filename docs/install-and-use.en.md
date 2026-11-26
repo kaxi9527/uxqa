@@ -6,7 +6,7 @@ After installing, run a project check, choose a specialist category and open **T
 
 **Local macOS preview.** For a `QA-Master-Preview-…-macOS-arm64.zip` archive, unzip it and open `QA Master Preview.app`. It can run alongside the installed edition. The preview keeps its own projects, access records and model settings in `~/Library/Application Support/UXQA Preview`. Choose a language and add the project you want to check on first launch.
 
-QA Master is distributed directly through GitHub Releases; no app store or QA Master account is required. The bundles include their own runtime and model module. Download the archive for your operating system and processor, and keep all extracted files together. This guide describes v0.8.1; earlier downloads may have different features. Check Releases for the versions actually available.
+QA Master is distributed directly through GitHub Releases; no app store or QA Master account is required. The bundles include their own runtime and model module. Download the archive for your operating system and processor, and keep all extracted files together. This guide describes v0.8.2; earlier downloads may have different features. Check Releases for the versions actually available.
 
 Local source import is built in. Supply your own model on this computer or LAN if needed. Remote repository scans require Git. Prepare the browser runtime, model and design exports before going offline. [Import check sources](product-guide.en.md#import-check-sources)
 
@@ -18,14 +18,14 @@ Download `SHA256SUMS.txt` from the same release. In the download folder, compute
 
 ```sh
 # macOS
-shasum -a 256 QA-Master-0.8.1-macOS-arm64.zip
+shasum -a 256 QA-Master-0.8.2-macOS-arm64.zip
 # Linux
-sha256sum qa-master-0.8.1-linux-x64.tar.gz
+sha256sum qa-master-0.8.2-linux-x64.tar.gz
 ```
 
 ```powershell
 # Windows PowerShell
-Get-FileHash .\qa-master-0.8.1-win-x64.zip -Algorithm SHA256
+Get-FileHash .\qa-master-0.8.2-win-x64.zip -Algorithm SHA256
 ```
 
 Substitute the actual archive name where necessary.

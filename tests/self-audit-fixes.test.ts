@@ -91,6 +91,7 @@ it('imports, binds and runs a basic requirement before the first inspection, and
     await page.getByLabel('Project page').selectOption('board');
     const stage=page.getByLabel('View stage');
     await stage.selectOption('done');
+    await page.locator('.kb-lane:visible[data-stage="done"]').waitFor();
     expect(await page.locator('.kb-lane:visible').count()).toBe(1);
     expect(await page.locator('.kb-lane:visible').getAttribute('data-stage')).toBe('done');
   }finally{
